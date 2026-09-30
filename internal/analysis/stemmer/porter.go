@@ -1,6 +1,10 @@
 package stemmer
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/Prateet-Github/bifrost/internal/analysis/tokenizer"
+)
 
 type PorterStemmer struct{}
 type suffixRule struct {
@@ -19,7 +23,23 @@ func (s *PorterStemmer) Stem(word string) string {
 		return word
 	}
 
+	word = step1a(word)
+	word = step1b(word)
+	word = step1c(word)
+
+	word = step2(word)
+	word = step3(word)
+	word = step4(word)
+
+	word = step5a(word)
+	word = step5b(word)
+
 	return word
+}
+
+func (s *PorterStemmer) StemToken(token tokenizer.Token) tokenizer.Token {
+	token.Text = s.Stem(token.Text)
+	return token
 }
 
 func isConsonant(word string, i int) bool {
@@ -325,6 +345,37 @@ func step4(word string) string {
 				strings.HasSuffix(stem, "t")) {
 			return stem
 		}
+	}
+
+	return word
+}
+
+func step5a(word string) string {
+	if !strings.HasSuffix(word, "e") {
+		return word
+	}
+
+	stem := strings.TrimSuffix(word, "e")
+	m := measure(stem)
+
+	if m > 1 {
+		return stem
+	}
+
+	if m == 1 && !isCVC(stem, len(stem)-1) {
+		return stem
+	}
+
+	return word
+}
+
+func step5b(word string) string {
+	if !strings.HasSuffix(word, "ll") {
+		return word
+	}
+
+	if measure(word) > 1 {
+		return word[:len(word)-1]
 	}
 
 	return word

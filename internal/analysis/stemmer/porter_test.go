@@ -2,6 +2,8 @@ package stemmer
 
 import (
 	"testing"
+
+	"github.com/Prateet-Github/bifrost/internal/analysis/tokenizer"
 )
 
 func TestMeasure(t *testing.T) {
@@ -346,5 +348,133 @@ func TestStep4(t *testing.T) {
 				)
 			}
 		})
+	}
+}
+
+func TestStep5a(t *testing.T) {
+	tests := []struct {
+		word     string
+		expected string
+	}{
+		{"probate", "probat"},
+		{"rate", "rate"},
+		{"cease", "ceas"},
+		{"controll", "controll"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.word, func(t *testing.T) {
+			got := step5a(tt.word)
+
+			if got != tt.expected {
+				t.Errorf(
+					"step5a(%q) = %q, want %q",
+					tt.word,
+					got,
+					tt.expected,
+				)
+			}
+		})
+	}
+}
+
+func TestStep5b(t *testing.T) {
+	tests := []struct {
+		word     string
+		expected string
+	}{
+		{"controll", "control"},
+		{"roll", "roll"},
+		{"fall", "fall"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.word, func(t *testing.T) {
+			got := step5b(tt.word)
+
+			if got != tt.expected {
+				t.Errorf(
+					"step5b(%q) = %q, want %q",
+					tt.word,
+					got,
+					tt.expected,
+				)
+			}
+		})
+	}
+}
+
+func TestStem(t *testing.T) {
+	tests := []struct {
+		word     string
+		expected string
+	}{
+		{"caresses", "caress"},
+		{"ponies", "poni"},
+		{"ties", "ti"},
+		{"cats", "cat"},
+		{"feed", "feed"},
+		{"agreed", "agre"},
+		{"plastered", "plaster"},
+		{"motoring", "motor"},
+		{"conflated", "conflat"},
+		{"troubled", "troubl"},
+		{"hopping", "hop"},
+		{"tanned", "tan"},
+		{"happy", "happi"},
+		{"relational", "relat"},
+		{"conditional", "condit"},
+		{"triplicate", "triplic"},
+		{"formative", "form"},
+		{"revival", "reviv"},
+		{"allowance", "allow"},
+		{"probate", "probat"},
+		{"controll", "control"},
+	}
+
+	stemmer := NewPorterStemmer()
+
+	for _, tt := range tests {
+		t.Run(tt.word, func(t *testing.T) {
+			got := stemmer.Stem(tt.word)
+
+			if got != tt.expected {
+				t.Errorf(
+					"Stem(%q) = %q, want %q",
+					tt.word,
+					got,
+					tt.expected,
+				)
+			}
+		})
+	}
+}
+
+func TestStemTokenPreservesMetadata(t *testing.T) {
+	stemmer := NewPorterStemmer()
+
+	token := tokenizer.Token{
+		Text:        "running",
+		Position:    5,
+		StartOffset: 20,
+		EndOffset:   27,
+	}
+
+	result := stemmer.StemToken(token)
+
+	if result.Text != "run" {
+		t.Errorf("Text = %q, want %q", result.Text, "run")
+	}
+
+	if result.Position != 5 {
+		t.Errorf("Position = %d, want 5", result.Position)
+	}
+
+	if result.StartOffset != 20 {
+		t.Errorf("StartOffset = %d, want 20", result.StartOffset)
+	}
+
+	if result.EndOffset != 27 {
+		t.Errorf("EndOffset = %d, want 27", result.EndOffset)
 	}
 }
