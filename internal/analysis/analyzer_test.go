@@ -42,3 +42,28 @@ func TestAnalyzer(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkAnalyzer(b *testing.B) {
+	analyzer := NewAnalyzer()
+
+	doc := document.Document{
+		ID:    "bench-1",
+		Title: "Benchmark Document",
+		Body: `
+			The quick brown fox is running through the forest.
+			Developers are building high performance applications
+			using Go, distributed systems, databases, networking,
+			and modern search technologies. Bifrost is a search
+			engine built from scratch to understand how information
+			retrieval systems work internally.
+		`,
+	}
+
+	b.ReportAllocs()
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = analyzer.Analyze(doc)
+	}
+}
