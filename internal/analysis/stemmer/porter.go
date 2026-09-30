@@ -3,6 +3,10 @@ package stemmer
 import "strings"
 
 type PorterStemmer struct{}
+type suffixRule struct {
+	suffix      string
+	replacement string
+}
 
 func NewPorterStemmer() *PorterStemmer {
 	return &PorterStemmer{}
@@ -194,6 +198,56 @@ func step1c(word string) string {
 
 	if containsVowel(stem) {
 		return stem + "i"
+	}
+
+	return word
+}
+
+func replaceSuffix(word, suffix, replacement string) string {
+	if !strings.HasSuffix(word, suffix) {
+		return word
+	}
+
+	return strings.TrimSuffix(word, suffix) + replacement
+}
+
+var step2Rules = []suffixRule{
+	{"ational", "ate"},
+	{"tional", "tion"},
+	{"enci", "ence"},
+	{"anci", "ance"},
+	{"izer", "ize"},
+	{"bli", "ble"},
+	{"alli", "al"},
+	{"entli", "ent"},
+	{"eli", "e"},
+	{"ousli", "ous"},
+	{"ization", "ize"},
+	{"ation", "ate"},
+	{"ator", "ate"},
+	{"alism", "al"},
+	{"iveness", "ive"},
+	{"fulness", "ful"},
+	{"ousness", "ous"},
+	{"aliti", "al"},
+	{"iviti", "ive"},
+	{"biliti", "ble"},
+	{"logi", "log"},
+}
+
+func step2(word string) string {
+	for _, rule := range step2Rules {
+		if !strings.HasSuffix(word, rule.suffix) {
+			continue
+		}
+
+		stem := strings.TrimSuffix(word, rule.suffix)
+
+		if measure(stem) > 0 {
+			return stem + rule.replacement
+		}
+
+		return word
 	}
 
 	return word

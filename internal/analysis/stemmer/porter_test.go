@@ -196,3 +196,83 @@ func TestStep1c(t *testing.T) {
 		})
 	}
 }
+
+func TestReplaceSuffix(t *testing.T) {
+	tests := []struct {
+		word        string
+		suffix      string
+		replacement string
+		expected    string
+	}{
+		{"relational", "ational", "ate", "relate"},
+		{"conditional", "tional", "tion", "condition"},
+		{"digitizer", "izer", "ize", "digitize"},
+		{"happy", "ness", "ful", "happy"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.word, func(t *testing.T) {
+			got := replaceSuffix(
+				tt.word,
+				tt.suffix,
+				tt.replacement,
+			)
+
+			if got != tt.expected {
+				t.Errorf(
+					"replaceSuffix(%q, %q, %q) = %q, want %q",
+					tt.word,
+					tt.suffix,
+					tt.replacement,
+					got,
+					tt.expected,
+				)
+			}
+		})
+	}
+}
+
+func TestStep2(t *testing.T) {
+	tests := []struct {
+		word     string
+		expected string
+	}{
+		{"relational", "relate"},
+		{"conditional", "condition"},
+		{"rational", "rational"},
+		{"valenci", "valence"},
+		{"hesitanci", "hesitance"},
+		{"digitizer", "digitize"},
+		{"conformabli", "conformable"},
+		{"radicalli", "radical"},
+		{"differentli", "different"},
+		{"vileli", "vile"},
+		{"analogousli", "analogous"},
+		{"vietnamization", "vietnamize"},
+		{"predication", "predicate"},
+		{"operator", "operate"},
+		{"feudalism", "feudal"},
+		{"decisiveness", "decisive"},
+		{"hopefulness", "hopeful"},
+		{"callousness", "callous"},
+		{"formaliti", "formal"},
+		{"sensitiviti", "sensitive"},
+		{"sensibiliti", "sensible"},
+		{"triplicate", "triplicate"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.word, func(t *testing.T) {
+			got := step2(tt.word)
+
+			if got != tt.expected {
+				t.Errorf(
+					"step2(%q) = %q, want %q",
+					tt.word,
+					got,
+					tt.expected,
+				)
+			}
+		})
+	}
+}
