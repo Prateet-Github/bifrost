@@ -252,3 +252,80 @@ func step2(word string) string {
 
 	return word
 }
+
+var step3Rules = []suffixRule{
+	{"icate", "ic"},
+	{"ative", ""},
+	{"alize", "al"},
+	{"iciti", "ic"},
+	{"ical", "ic"},
+	{"ful", ""},
+	{"ness", ""},
+}
+
+func step3(word string) string {
+	for _, rule := range step3Rules {
+		if !strings.HasSuffix(word, rule.suffix) {
+			continue
+		}
+
+		stem := strings.TrimSuffix(word, rule.suffix)
+
+		if measure(stem) > 0 {
+			return stem + rule.replacement
+		}
+
+		return word
+	}
+
+	return word
+}
+
+var step4Suffixes = []string{
+	"al",
+	"ance",
+	"ence",
+	"er",
+	"ic",
+	"able",
+	"ible",
+	"ant",
+	"ement",
+	"ment",
+	"ent",
+	"ou",
+	"ism",
+	"ate",
+	"iti",
+	"ous",
+	"ive",
+	"ize",
+}
+
+func step4(word string) string {
+	for _, suffix := range step4Suffixes {
+		if !strings.HasSuffix(word, suffix) {
+			continue
+		}
+
+		stem := strings.TrimSuffix(word, suffix)
+
+		if measure(stem) > 1 {
+			return stem
+		}
+
+		return word
+	}
+
+	if strings.HasSuffix(word, "ion") {
+		stem := strings.TrimSuffix(word, "ion")
+
+		if measure(stem) > 1 &&
+			(strings.HasSuffix(stem, "s") ||
+				strings.HasSuffix(stem, "t")) {
+			return stem
+		}
+	}
+
+	return word
+}

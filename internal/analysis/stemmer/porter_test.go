@@ -276,3 +276,75 @@ func TestStep2(t *testing.T) {
 		})
 	}
 }
+
+func TestStep3(t *testing.T) {
+	tests := []struct {
+		word     string
+		expected string
+	}{
+		{"triplicate", "triplic"},
+		{"formative", "form"},
+		{"formalize", "formal"},
+		{"electriciti", "electric"},
+		{"electrical", "electric"},
+		{"hopeful", "hope"},
+		{"goodness", "good"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.word, func(t *testing.T) {
+			got := step3(tt.word)
+
+			if got != tt.expected {
+				t.Errorf(
+					"step3(%q) = %q, want %q",
+					tt.word,
+					got,
+					tt.expected,
+				)
+			}
+		})
+	}
+}
+
+func TestStep4(t *testing.T) {
+	tests := []struct {
+		word     string
+		expected string
+	}{
+		{"revival", "reviv"},
+		{"allowance", "allow"},
+		{"inference", "infer"},
+		{"airliner", "airlin"},
+		{"gyroscopic", "gyroscop"},
+		{"adjustable", "adjust"},
+		{"defensible", "defens"},
+		{"irritant", "irrit"},
+		{"replacement", "replac"},
+		{"adjustment", "adjust"},
+		{"dependent", "depend"},
+		{"homologou", "homolog"},
+		{"communism", "commun"},
+		{"activate", "activ"},
+		{"angulariti", "angular"},
+		{"homologous", "homolog"},
+		{"effective", "effect"},
+		{"bowdlerize", "bowdler"},
+		{"adoption", "adopt"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.word, func(t *testing.T) {
+			got := step4(tt.word)
+
+			if got != tt.expected {
+				t.Errorf(
+					"step4(%q) = %q, want %q",
+					tt.word,
+					got,
+					tt.expected,
+				)
+			}
+		})
+	}
+}
