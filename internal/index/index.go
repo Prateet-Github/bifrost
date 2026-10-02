@@ -49,3 +49,7 @@ func (idx *InvertedIndex) AddDocument(
 		posting.Positions = append(posting.Positions, token.Position)
 	}
 }
+
+func (idx *InvertedIndex) Lookup(term string) []Posting {
+	return idx.terms[term]
+}

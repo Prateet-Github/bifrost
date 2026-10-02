@@ -133,3 +133,69 @@ func TestAddMultipleDocuments(t *testing.T) {
 		t.Errorf("expected D2 TF = 1, got %d", postings[1].TermFreq)
 	}
 }
+
+func TestLookup(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	tokens := []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "fast", Position: 1},
+		{Text: "go", Position: 2},
+	}
+
+	idx.AddDocument("D1", tokens)
+
+	postings := idx.Lookup("go")
+
+	if len(postings) != 1 {
+		t.Fatalf("expected 1 posting, got %d", len(postings))
+	}
+
+	if postings[0].DocID != "D1" {
+		t.Errorf("expected DocID D1, got %s", postings[0].DocID)
+	}
+
+	if postings[0].TermFreq != 2 {
+		t.Errorf("expected TF 2, got %d", postings[0].TermFreq)
+	}
+
+	expectedPositions := []int{0, 2}
+
+	if len(postings[0].Positions) != len(expectedPositions) {
+		t.Fatalf(
+			"expected %d positions, got %d",
+			len(expectedPositions),
+			len(postings[0].Positions),
+		)
+	}
+
+	for i, expected := range expectedPositions {
+		if postings[0].Positions[i] != expected {
+			t.Errorf(
+				"expected position %d at index %d, got %d",
+				expected,
+				i,
+				postings[0].Positions[i],
+			)
+		}
+	}
+}
+
+func TestLookupUnknownTerm(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	tokens := []tokenizer.Token{
+		{Text: "go", Position: 0},
+	}
+
+	idx.AddDocument("D1", tokens)
+
+	postings := idx.Lookup("rust")
+
+	if len(postings) != 0 {
+		t.Fatalf(
+			"expected no postings for unknown term, got %d",
+			len(postings),
+		)
+	}
+}
