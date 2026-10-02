@@ -5,7 +5,6 @@ import (
 	"github.com/Prateet-Github/bifrost/internal/analysis/normalizer"
 	"github.com/Prateet-Github/bifrost/internal/analysis/stemmer"
 	"github.com/Prateet-Github/bifrost/internal/analysis/tokenizer"
-	"github.com/Prateet-Github/bifrost/internal/document"
 )
 
 type Analyzer struct {
@@ -24,8 +23,8 @@ func NewAnalyzer() *Analyzer {
 	}
 }
 
-func (a *Analyzer) Analyze(doc document.Document) []tokenizer.Token {
-	tokens := a.tokenizer.Tokenize(doc.Body)
+func (a *Analyzer) Analyze(text string) []tokenizer.Token {
+	tokens := a.tokenizer.Tokenize(text)
 
 	for i := range tokens {
 		tokens[i] = a.normalizer.Normalize(tokens[i])
