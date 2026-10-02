@@ -199,3 +199,81 @@ func TestLookupUnknownTerm(t *testing.T) {
 		)
 	}
 }
+
+func TestDocumentFrequency(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	idx.AddDocument("D1", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "fast", Position: 1},
+	})
+
+	idx.AddDocument("D2", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "server", Position: 1},
+	})
+
+	idx.AddDocument("D3", []tokenizer.Token{
+		{Text: "rust", Position: 0},
+	})
+
+	tests := []struct {
+		term string
+		want int
+	}{
+		{"go", 2},
+		{"fast", 1},
+		{"rust", 1},
+		{"unknown", 0},
+	}
+
+	for _, tt := range tests {
+		got := idx.DocumentFrequency(tt.term)
+
+		if got != tt.want {
+			t.Errorf(
+				"DocumentFrequency(%q) = %d, want %d",
+				tt.term,
+				got,
+				tt.want,
+			)
+		}
+	}
+}
+
+func TestStats(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	idx.AddDocument("D1", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "fast", Position: 1},
+	})
+
+	idx.AddDocument("D2", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "server", Position: 1},
+	})
+
+	idx.AddDocument("D3", []tokenizer.Token{
+		{Text: "rust", Position: 0},
+	})
+
+	stats := idx.Stats()
+
+	if stats.Documents != 3 {
+		t.Errorf(
+			"expected 3 documents, got %d",
+			stats.Documents,
+		)
+	}
+
+	expectedAverage := 5.0 / 3.0
+
+	if stats.AverageDocLength != expectedAverage {
+		t.Errorf(
+			"expected average document length %f, got %f",
+			expectedAverage,
+			stats.AverageDocLength,
+		)
+	}
+}
