@@ -1,0 +1,135 @@
+package index
+
+import (
+	"testing"
+
+	"github.com/Prateet-Github/bifrost/internal/analysis/tokenizer"
+)
+
+func TestAddDocument(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	tokens := []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "fast", Position: 1},
+		{Text: "go", Position: 2},
+		{Text: "go", Position: 3},
+	}
+
+	idx.AddDocument("D1", tokens)
+
+	// Check document statistics.
+	stats, ok := idx.documents["D1"]
+	if !ok {
+		t.Fatal("expected document D1 to exist")
+	}
+
+	if stats.Length != 4 {
+		t.Errorf("expected document length 4, got %d", stats.Length)
+	}
+
+	// Check "go" posting.
+	goPostings, ok := idx.terms["go"]
+	if !ok {
+		t.Fatal("expected term 'go' to exist")
+	}
+
+	if len(goPostings) != 1 {
+		t.Fatalf("expected 1 posting for 'go', got %d", len(goPostings))
+	}
+
+	goPosting := goPostings[0]
+
+	if goPosting.DocID != "D1" {
+		t.Errorf("expected DocID D1, got %s", goPosting.DocID)
+	}
+
+	if goPosting.TermFreq != 3 {
+		t.Errorf("expected term frequency 3, got %d", goPosting.TermFreq)
+	}
+
+	expectedPositions := []int{0, 2, 3}
+
+	if len(goPosting.Positions) != len(expectedPositions) {
+		t.Fatalf(
+			"expected %d positions, got %d",
+			len(expectedPositions),
+			len(goPosting.Positions),
+		)
+	}
+
+	for i, position := range expectedPositions {
+		if goPosting.Positions[i] != position {
+			t.Errorf(
+				"expected position %d at index %d, got %d",
+				position,
+				i,
+				goPosting.Positions[i],
+			)
+		}
+	}
+
+	// Check "fast" posting.
+	fastPostings, ok := idx.terms["fast"]
+	if !ok {
+		t.Fatal("expected term 'fast' to exist")
+	}
+
+	if len(fastPostings) != 1 {
+		t.Fatalf("expected 1 posting for 'fast', got %d", len(fastPostings))
+	}
+
+	if fastPostings[0].TermFreq != 1 {
+		t.Errorf(
+			"expected term frequency 1, got %d",
+			fastPostings[0].TermFreq,
+		)
+	}
+
+	if len(fastPostings[0].Positions) != 1 ||
+		fastPostings[0].Positions[0] != 1 {
+		t.Errorf(
+			"expected positions [1], got %v",
+			fastPostings[0].Positions,
+		)
+	}
+}
+
+func TestAddMultipleDocuments(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	doc1 := []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "fast", Position: 1},
+	}
+
+	doc2 := []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "server", Position: 1},
+	}
+
+	idx.AddDocument("D1", doc1)
+	idx.AddDocument("D2", doc2)
+
+	postings := idx.terms["go"]
+
+	if len(postings) != 2 {
+		t.Fatalf("expected 2 postings for 'go', got %d", len(postings))
+	}
+
+	if postings[0].DocID != "D1" {
+		t.Errorf("expected first posting to be D1, got %s", postings[0].DocID)
+	}
+
+	if postings[1].DocID != "D2" {
+		t.Errorf("expected second posting to be D2, got %s", postings[1].DocID)
+	}
+
+	if postings[0].TermFreq != 1 {
+		t.Errorf("expected D1 TF = 1, got %d", postings[0].TermFreq)
+	}
+
+	if postings[1].TermFreq != 1 {
+		t.Errorf("expected D2 TF = 1, got %d", postings[1].TermFreq)
+	}
+}
