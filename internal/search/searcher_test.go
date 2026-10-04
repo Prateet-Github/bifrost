@@ -205,3 +205,29 @@ func TestSearchZeroK(t *testing.T) {
 		)
 	}
 }
+
+func TestPhraseMatch(t *testing.T) {
+	idx := index.NewInvertedIndex()
+
+	idx.AddDocument("D1", []tokenizer.Token{
+		{Text: "distribut", Position: 0},
+		{Text: "system", Position: 1},
+		{Text: "are", Position: 2},
+	})
+
+	idx.AddDocument("D2", []tokenizer.Token{
+		{Text: "distribut", Position: 0},
+		{Text: "database", Position: 1},
+		{Text: "system", Position: 2},
+	})
+
+	searcher := NewSearcher(idx)
+
+	if !searcher.PhraseMatch("distributed systems", "D1") {
+		t.Error("expected phrase to match D1")
+	}
+
+	if searcher.PhraseMatch("distributed systems", "D2") {
+		t.Error("expected phrase not to match D2")
+	}
+}

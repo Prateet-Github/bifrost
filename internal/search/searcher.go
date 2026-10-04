@@ -115,3 +115,23 @@ func (s *Searcher) Search(rawQuery string, k int) []Result {
 
 	return results[:k]
 }
+
+func (s *Searcher) PhraseMatch(
+	rawPhrase string,
+	docID string,
+) bool {
+	tokens := s.queryAnalyzer.Analyze(rawPhrase)
+
+	if len(tokens) != 2 {
+		return false
+	}
+
+	return phraseMatch(
+		s.index,
+		docID,
+		[]string{
+			tokens[0].Text,
+			tokens[1].Text,
+		},
+	)
+}
