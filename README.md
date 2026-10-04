@@ -1,4 +1,5 @@
 # Bifrost
+
 Bifrost is a search engine written from scratch in Go, built to understand and implement the core components behind traditional lexical search.
 
 Analysis Pipeline
