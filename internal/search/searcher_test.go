@@ -116,7 +116,7 @@ func TestSearchRanksResults(t *testing.T) {
 
 	searcher := NewSearcher(idx)
 
-	results := searcher.Search("go server")
+	results := searcher.Search("go server", 3)
 
 	if len(results) != 3 {
 		t.Fatalf(
@@ -137,6 +137,71 @@ func TestSearchRanksResults(t *testing.T) {
 			"expected first result to have higher score: %f <= %f",
 			results[0].Score,
 			results[1].Score,
+		)
+	}
+}
+
+func TestSearchTopK(t *testing.T) {
+	idx := index.NewInvertedIndex()
+
+	idx.AddDocument("D1", []tokenizer.Token{
+		{Text: "go", Position: 0},
+	})
+
+	idx.AddDocument("D2", []tokenizer.Token{
+		{Text: "go", Position: 0},
+	})
+
+	idx.AddDocument("D3", []tokenizer.Token{
+		{Text: "go", Position: 0},
+	})
+
+	searcher := NewSearcher(idx)
+
+	results := searcher.Search("go", 2)
+
+	if len(results) != 2 {
+		t.Fatalf(
+			"expected 2 results, got %d",
+			len(results),
+		)
+	}
+}
+
+func TestSearchTopKGreaterThanResults(t *testing.T) {
+	idx := index.NewInvertedIndex()
+
+	idx.AddDocument("D1", []tokenizer.Token{
+		{Text: "go", Position: 0},
+	})
+
+	searcher := NewSearcher(idx)
+
+	results := searcher.Search("go", 10)
+
+	if len(results) != 1 {
+		t.Fatalf(
+			"expected 1 result, got %d",
+			len(results),
+		)
+	}
+}
+
+func TestSearchZeroK(t *testing.T) {
+	idx := index.NewInvertedIndex()
+
+	idx.AddDocument("D1", []tokenizer.Token{
+		{Text: "go", Position: 0},
+	})
+
+	searcher := NewSearcher(idx)
+
+	results := searcher.Search("go", 0)
+
+	if len(results) != 0 {
+		t.Fatalf(
+			"expected 0 results, got %d",
+			len(results),
 		)
 	}
 }

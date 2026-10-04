@@ -72,10 +72,10 @@ func (s *Searcher) Candidates(rawQuery string) []Candidate {
 	return results
 }
 
-func (s *Searcher) Search(rawQuery string) []Result {
+func (s *Searcher) Search(rawQuery string, k int) []Result {
 	tokens := s.queryAnalyzer.Analyze(rawQuery)
 
-	if len(tokens) == 0 {
+	if len(tokens) == 0 || k <= 0 {
 		return nil
 	}
 
@@ -102,8 +102,16 @@ func (s *Searcher) Search(rawQuery string) []Result {
 	}
 
 	sort.Slice(results, func(i, j int) bool {
+		if results[i].Score == results[j].Score {
+			return results[i].DocID < results[j].DocID
+		}
+
 		return results[i].Score > results[j].Score
 	})
 
-	return results
+	if k > len(results) {
+		k = len(results)
+	}
+
+	return results[:k]
 }
