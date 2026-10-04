@@ -96,3 +96,47 @@ func TestCandidates(t *testing.T) {
 		)
 	}
 }
+
+func TestSearchRanksResults(t *testing.T) {
+	idx := index.NewInvertedIndex()
+
+	idx.AddDocument("D1", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "go", Position: 1},
+		{Text: "server", Position: 2},
+	})
+
+	idx.AddDocument("D2", []tokenizer.Token{
+		{Text: "go", Position: 0},
+	})
+
+	idx.AddDocument("D3", []tokenizer.Token{
+		{Text: "server", Position: 0},
+	})
+
+	searcher := NewSearcher(idx)
+
+	results := searcher.Search("go server")
+
+	if len(results) != 3 {
+		t.Fatalf(
+			"expected 3 results, got %d",
+			len(results),
+		)
+	}
+
+	if results[0].DocID != "D1" {
+		t.Errorf(
+			"expected D1 to rank first, got %s",
+			results[0].DocID,
+		)
+	}
+
+	if results[0].Score <= results[1].Score {
+		t.Errorf(
+			"expected first result to have higher score: %f <= %f",
+			results[0].Score,
+			results[1].Score,
+		)
+	}
+}

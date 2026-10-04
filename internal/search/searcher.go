@@ -1,8 +1,11 @@
 package search
 
 import (
+	"sort"
+
 	"github.com/Prateet-Github/bifrost/internal/index"
 	"github.com/Prateet-Github/bifrost/internal/query"
+	"github.com/Prateet-Github/bifrost/internal/scoring"
 )
 
 type Match struct {
@@ -15,15 +18,22 @@ type Candidate struct {
 	Matches []Match
 }
 
+type Result struct {
+	DocID string
+	Score float64
+}
+
 type Searcher struct {
 	index         *index.InvertedIndex
 	queryAnalyzer *query.Analyzer
+	scorer        *scoring.BM25
 }
 
 func NewSearcher(idx *index.InvertedIndex) *Searcher {
 	return &Searcher{
 		index:         idx,
 		queryAnalyzer: query.NewAnalyzer(),
+		scorer:        scoring.NewBM25(idx),
 	}
 }
 
@@ -58,6 +68,42 @@ func (s *Searcher) Candidates(rawQuery string) []Candidate {
 	for _, candidate := range candidates {
 		results = append(results, *candidate)
 	}
+
+	return results
+}
+
+func (s *Searcher) Search(rawQuery string) []Result {
+	tokens := s.queryAnalyzer.Analyze(rawQuery)
+
+	if len(tokens) == 0 {
+		return nil
+	}
+
+	candidates := s.Candidates(rawQuery)
+
+	results := make([]Result, 0, len(candidates))
+
+	for _, candidate := range candidates {
+		terms := make([]string, 0, len(candidate.Matches))
+
+		for _, match := range candidate.Matches {
+			terms = append(terms, match.Term)
+		}
+
+		score := s.scorer.Score(
+			terms,
+			candidate.DocID,
+		)
+
+		results = append(results, Result{
+			DocID: candidate.DocID,
+			Score: score,
+		})
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Score > results[j].Score
+	})
 
 	return results
 }
