@@ -53,3 +53,8 @@ func (idx *InvertedIndex) AddDocument(
 func (idx *InvertedIndex) Lookup(term string) []Posting {
 	return idx.terms[term]
 }
+
+func (idx *InvertedIndex) DocumentStats(docID string) (DocumentStats, bool) {
+	stats, exists := idx.documents[docID]
+	return stats, exists
+}
