@@ -3,6 +3,7 @@ package search
 import (
 	"testing"
 
+	"github.com/Prateet-Github/bifrost/internal/analysis"
 	"github.com/Prateet-Github/bifrost/internal/analysis/tokenizer"
 	"github.com/Prateet-Github/bifrost/internal/index"
 )
@@ -93,5 +94,20 @@ func TestPositionsMatch(t *testing.T) {
 				)
 			}
 		})
+	}
+}
+
+func TestPhraseMatch_DoesNotCollapseStopWordPositions(t *testing.T) {
+	analyzer := analysis.NewAnalyzer()
+	idx := index.NewInvertedIndex()
+
+	tokens := analyzer.Analyze("cat in the hat")
+
+	idx.AddDocument("D1", tokens)
+
+	searcher := NewSearcher(idx)
+
+	if searcher.PhraseMatch("cat hat", "D1") {
+		t.Fatal(`"cat hat" should not match "cat in the hat"`)
 	}
 }

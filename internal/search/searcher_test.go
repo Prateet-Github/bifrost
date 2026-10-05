@@ -3,6 +3,7 @@ package search
 import (
 	"testing"
 
+	"github.com/Prateet-Github/bifrost/internal/analysis"
 	"github.com/Prateet-Github/bifrost/internal/analysis/tokenizer"
 	"github.com/Prateet-Github/bifrost/internal/index"
 )
@@ -229,5 +230,64 @@ func TestPhraseMatch(t *testing.T) {
 
 	if searcher.PhraseMatch("distributed systems", "D2") {
 		t.Error("expected phrase not to match D2")
+	}
+}
+
+func TestSearchRankingRegression(t *testing.T) {
+	analyzer := analysis.NewAnalyzer()
+	idx := index.NewInvertedIndex()
+
+	documents := map[string]string{
+		"systems.txt": "distributed systems distributed systems search",
+		"go.txt":      "go programming language",
+		"search.txt":  "search engine information retrieval",
+	}
+
+	for id, text := range documents {
+		tokens := analyzer.Analyze(text)
+		idx.AddDocument(id, tokens)
+	}
+
+	searcher := NewSearcher(idx)
+
+	tests := []struct {
+		name          string
+		query         string
+		expectedTopID string
+	}{
+		{
+			name:          "distributed systems",
+			query:         "distributed systems",
+			expectedTopID: "systems.txt",
+		},
+		{
+			name:          "go",
+			query:         "go",
+			expectedTopID: "go.txt",
+		},
+		{
+			name:          "search",
+			query:         "search",
+			expectedTopID: "search.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results := searcher.Search(tt.query, 3)
+
+			if len(results) == 0 {
+				t.Fatalf("query %q returned no results", tt.query)
+			}
+
+			if results[0].DocID != tt.expectedTopID {
+				t.Errorf(
+					"query %q: top result = %q, want %q",
+					tt.query,
+					results[0].DocID,
+					tt.expectedTopID,
+				)
+			}
+		})
 	}
 }

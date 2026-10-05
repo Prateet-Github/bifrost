@@ -56,3 +56,29 @@ func BenchmarkAnalyzer(b *testing.B) {
 		_ = analyzer.Analyze(text)
 	}
 }
+
+func TestAnalyzer_PreservesPositionsAfterStopWordRemoval(t *testing.T) {
+	analyzer := NewAnalyzer()
+
+	tokens := analyzer.Analyze("cat in the hat")
+
+	if len(tokens) != 2 {
+		t.Fatalf("got %d tokens, want 2", len(tokens))
+	}
+
+	if tokens[0].Text != "cat" {
+		t.Errorf("tokens[0].Text = %q, want %q", tokens[0].Text, "cat")
+	}
+
+	if tokens[0].Position != 0 {
+		t.Errorf("tokens[0].Position = %d, want 0", tokens[0].Position)
+	}
+
+	if tokens[1].Text != "hat" {
+		t.Errorf("tokens[1].Text = %q, want %q", tokens[1].Text, "hat")
+	}
+
+	if tokens[1].Position != 3 {
+		t.Errorf("tokens[1].Position = %d, want 3", tokens[1].Position)
+	}
+}
