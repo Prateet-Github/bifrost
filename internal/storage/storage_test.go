@@ -57,3 +57,35 @@ func TestSaveAndLoadPostings(t *testing.T) {
 		t.Fatalf("loaded postings = %+v, want %+v", actual, expected)
 	}
 }
+
+func TestSaveAndLoadDocumentStats(t *testing.T) {
+	path := t.TempDir() + "/bifrost.db"
+
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+	defer store.Close()
+
+	expected := index.DocumentStats{
+		Length: 42,
+	}
+
+	err = store.SaveDocumentStats("D1", expected)
+	if err != nil {
+		t.Fatalf("failed to save document stats: %v", err)
+	}
+
+	actual, err := store.LoadDocumentStats("D1")
+	if err != nil {
+		t.Fatalf("failed to load document stats: %v", err)
+	}
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf(
+			"loaded stats = %+v, want %+v",
+			actual,
+			expected,
+		)
+	}
+}

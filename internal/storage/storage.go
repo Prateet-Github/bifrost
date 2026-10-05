@@ -96,3 +96,38 @@ func encode(value any) ([]byte, error) {
 func decode(data []byte, value any) error {
 	return gob.NewDecoder(bytes.NewReader(data)).Decode(value)
 }
+
+func (s *Storage) SaveDocumentStats(
+	docID string,
+	stats index.DocumentStats,
+) error {
+	data, err := encode(stats)
+	if err != nil {
+		return err
+	}
+
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(documentsBucket)
+
+		return bucket.Put([]byte(docID), data)
+	})
+}
+
+func (s *Storage) LoadDocumentStats(
+	docID string,
+) (index.DocumentStats, error) {
+	var stats index.DocumentStats
+
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(documentsBucket)
+
+		data := bucket.Get([]byte(docID))
+		if data == nil {
+			return nil
+		}
+
+		return decode(data, &stats)
+	})
+
+	return stats, err
+}
