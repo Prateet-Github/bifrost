@@ -131,3 +131,33 @@ func (s *Storage) LoadDocumentStats(
 
 	return stats, err
 }
+
+func (s *Storage) SaveStats(stats index.Stats) error {
+	data, err := encode(stats)
+	if err != nil {
+		return err
+	}
+
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(metadataBucket)
+
+		return bucket.Put([]byte("stats"), data)
+	})
+}
+
+func (s *Storage) LoadStats() (index.Stats, error) {
+	var stats index.Stats
+
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(metadataBucket)
+
+		data := bucket.Get([]byte("stats"))
+		if data == nil {
+			return nil
+		}
+
+		return decode(data, &stats)
+	})
+
+	return stats, err
+}

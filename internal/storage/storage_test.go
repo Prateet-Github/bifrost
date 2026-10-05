@@ -89,3 +89,36 @@ func TestSaveAndLoadDocumentStats(t *testing.T) {
 		)
 	}
 }
+
+func TestSaveAndLoadStats(t *testing.T) {
+	path := t.TempDir() + "/bifrost.db"
+
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+	defer store.Close()
+
+	expected := index.Stats{
+		Documents:        10,
+		AverageDocLength: 25.5,
+	}
+
+	err = store.SaveStats(expected)
+	if err != nil {
+		t.Fatalf("failed to save stats: %v", err)
+	}
+
+	actual, err := store.LoadStats()
+	if err != nil {
+		t.Fatalf("failed to load stats: %v", err)
+	}
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Fatalf(
+			"loaded stats = %+v, want %+v",
+			actual,
+			expected,
+		)
+	}
+}
