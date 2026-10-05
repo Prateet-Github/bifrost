@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Prateet-Github/bifrost/internal/analysis"
 	"github.com/Prateet-Github/bifrost/internal/index"
 )
 
@@ -119,6 +120,127 @@ func TestSaveAndLoadStats(t *testing.T) {
 			"loaded stats = %+v, want %+v",
 			actual,
 			expected,
+		)
+	}
+}
+
+func TestSaveIndex(t *testing.T) {
+	path := t.TempDir() + "/bifrost.db"
+
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+	defer store.Close()
+
+	analyzer := analysis.NewAnalyzer()
+	idx := index.NewInvertedIndex()
+
+	tokens := analyzer.Analyze(
+		"Go is a programming language",
+	)
+
+	idx.AddDocument("go.txt", tokens)
+
+	err = store.SaveIndex(idx)
+	if err != nil {
+		t.Fatalf("failed to save index: %v", err)
+	}
+
+	postings, err := store.LoadPostings("program")
+	if err != nil {
+		t.Fatalf("failed to load postings: %v", err)
+	}
+
+	if len(postings) != 1 {
+		t.Fatalf(
+			"postings count = %d, want 1",
+			len(postings),
+		)
+	}
+
+	stats, err := store.LoadDocumentStats("go.txt")
+	if err != nil {
+		t.Fatalf("failed to load document stats: %v", err)
+	}
+
+	if stats.Length != len(tokens) {
+		t.Fatalf(
+			"document length = %d, want %d",
+			stats.Length,
+			len(tokens),
+		)
+	}
+}
+
+func TestSaveAndLoadIndex(t *testing.T) {
+	path := t.TempDir() + "/bifrost.db"
+
+	analyzer := analysis.NewAnalyzer()
+	original := index.NewInvertedIndex()
+
+	tokens := analyzer.Analyze(
+		"distributed systems search engine",
+	)
+
+	original.AddDocument("systems.txt", tokens)
+
+	// First process: save
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+
+	if err := store.SaveIndex(original); err != nil {
+		t.Fatalf("failed to save index: %v", err)
+	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("failed to close storage: %v", err)
+	}
+
+	// Simulate process restart
+	store, err = Open(path)
+	if err != nil {
+		t.Fatalf("failed to reopen storage: %v", err)
+	}
+	defer store.Close()
+
+	// Second process: load
+	loaded, err := store.LoadIndex()
+	if err != nil {
+		t.Fatalf("failed to load index: %v", err)
+	}
+
+	// Verify term postings
+	postings := loaded.Lookup("distribut")
+
+	if len(postings) != 1 {
+		t.Fatalf(
+			"postings count = %d, want 1",
+			len(postings),
+		)
+	}
+
+	if postings[0].DocID != "systems.txt" {
+		t.Fatalf(
+			"docID = %s, want systems.txt",
+			postings[0].DocID,
+		)
+	}
+
+	// Verify document statistics
+	stats, ok := loaded.DocumentStats("systems.txt")
+
+	if !ok {
+		t.Fatal("document stats not found")
+	}
+
+	if stats.Length != len(tokens) {
+		t.Fatalf(
+			"document length = %d, want %d",
+			stats.Length,
+			len(tokens),
 		)
 	}
 }

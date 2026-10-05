@@ -161,3 +161,93 @@ func (s *Storage) LoadStats() (index.Stats, error) {
 
 	return stats, err
 }
+
+func (s *Storage) SaveIndex(idx *index.InvertedIndex) error {
+	terms := idx.Terms()
+
+	for term, postings := range terms {
+		if err := s.SavePostings(term, postings); err != nil {
+			return err
+		}
+	}
+
+	documents := idx.Documents()
+
+	for docID, stats := range documents {
+		if err := s.SaveDocumentStats(docID, stats); err != nil {
+			return err
+		}
+	}
+
+	return s.SaveStats(idx.Stats())
+}
+
+func (s *Storage) LoadIndex() (*index.InvertedIndex, error) {
+	idx := index.NewInvertedIndex()
+
+	terms, err := s.loadAllTerms()
+	if err != nil {
+		return nil, err
+	}
+
+	for term, postings := range terms {
+		for _, posting := range postings {
+			idx.AddPosting(term, posting)
+		}
+	}
+
+	documents, err := s.loadAllDocuments()
+	if err != nil {
+		return nil, err
+	}
+
+	for docID, stats := range documents {
+		idx.SetDocumentStats(docID, stats)
+	}
+
+	return idx, nil
+}
+
+func (s *Storage) loadAllTerms() (map[string][]index.Posting, error) {
+	terms := make(map[string][]index.Posting)
+
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(termsBucket)
+
+		return bucket.ForEach(func(key, value []byte) error {
+			var postings []index.Posting
+
+			if err := decode(value, &postings); err != nil {
+				return err
+			}
+
+			terms[string(key)] = postings
+
+			return nil
+		})
+	})
+
+	return terms, err
+}
+
+func (s *Storage) loadAllDocuments() (map[string]index.DocumentStats, error) {
+	documents := make(map[string]index.DocumentStats)
+
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(documentsBucket)
+
+		return bucket.ForEach(func(key, value []byte) error {
+			var stats index.DocumentStats
+
+			if err := decode(value, &stats); err != nil {
+				return err
+			}
+
+			documents[string(key)] = stats
+
+			return nil
+		})
+	})
+
+	return documents, err
+}

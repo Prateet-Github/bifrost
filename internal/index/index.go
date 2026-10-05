@@ -58,3 +58,34 @@ func (idx *InvertedIndex) DocumentStats(docID string) (DocumentStats, bool) {
 	stats, exists := idx.documents[docID]
 	return stats, exists
 }
+
+func (idx *InvertedIndex) Terms() map[string][]Posting {
+	terms := make(map[string][]Posting, len(idx.terms))
+
+	for term, postings := range idx.terms {
+		terms[term] = append([]Posting(nil), postings...)
+	}
+
+	return terms
+}
+
+func (idx *InvertedIndex) Documents() map[string]DocumentStats {
+	documents := make(map[string]DocumentStats, len(idx.documents))
+
+	for docID, stats := range idx.documents {
+		documents[docID] = stats
+	}
+
+	return documents
+}
+
+func (idx *InvertedIndex) AddPosting(term string, posting Posting) {
+	idx.terms[term] = append(idx.terms[term], posting)
+}
+
+func (idx *InvertedIndex) SetDocumentStats(
+	docID string,
+	stats DocumentStats,
+) {
+	idx.documents[docID] = stats
+}
