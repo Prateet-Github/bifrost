@@ -54,4 +54,5 @@ Uses bbolt for persistent index storage, including postings, document statistics
 
 ## Tech Stack
 
-Go · bbolt · BM25 · Inverted Index · Porter Stemmer
+- Go
+- bbolt
