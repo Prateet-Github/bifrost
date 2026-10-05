@@ -1,42 +1,57 @@
 # Bifrost
 
-Bifrost is a search engine written from scratch in Go, built to understand and implement the core components behind traditional lexical search.
-
-Analysis Pipeline
-
-The analysis pipeline takes parsed document text and produces analyzed tokens.
+Bifrost is a search engine written from scratch in Go, built to understand the core components behind traditional lexical search.
 
 ```text
-Document
-   ↓
+Documents
+    ↓
+Ingestion
+    ↓
 Tokenization
-   ↓
+    ↓
 Normalization
-   ↓
+    ↓
 Filtering
-   ↓
-Stemming
-   ↓
+    ↓
+Porter Stemming
+    ↓
 Inverted Index
-   ↓
-BM25 Ranking
+    ↓
+bbolt Persistence
 ```
 
-It includes:
+## Analysis
 
-* Tokenization — splits text into tokens while preserving positions and offsets.
-* Normalization — lowercases and normalizes text.
-* Filtering — removes stop words.
-* Stemming — applies the Porter stemming algorithm.
+- Unicode-aware tokenization with positions and offsets
+- Lowercasing and accent normalization
+- Stop-word filtering
+- Porter stemming
+- Positional inverted index
 
 ## Search
 
-The current search pipeline includes:
+```text
+Query
+  ↓
+Query Analysis
+  ↓
+Candidate Generation
+  ↓
+BM25
+  ↓
+Top-K Results
+```
 
-* Inverted index
-* Term frequency and document statistics
-* Query analysis
-* Candidate generation
-* BM25 scoring
-* Top-K ranked results
-* Two-word phrase matching using token positions
+- BM25 ranking
+- Term/document statistics
+- Positional phrase matching
+- Deterministic ranking
+- Regression-tested search pipeline
+
+## Persistence
+
+Uses bbolt for persistent index storage, including postings, document statistics, and index restoration across restarts.
+
+## Tech Stack
+
+Go · bbolt · BM25 · Inverted Index · Porter Stemmer
