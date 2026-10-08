@@ -14,6 +14,13 @@ var (
 	metadataBucket  = []byte("metadata")
 )
 
+var (
+	builtKey         = []byte("built")
+	schemaVersionKey = []byte("schema_version")
+)
+
+const currentSchemaVersion = "1"
+
 type Storage struct {
 	db *bbolt.DB
 }
@@ -163,23 +170,59 @@ func (s *Storage) LoadStats() (index.Stats, error) {
 }
 
 func (s *Storage) SaveIndex(idx *index.InvertedIndex) error {
-	terms := idx.Terms()
+	termsData := idx.Terms()
+	documentsData := idx.Documents()
+	stats := idx.Stats()
 
-	for term, postings := range terms {
-		if err := s.SavePostings(term, postings); err != nil {
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		terms := tx.Bucket(termsBucket)
+		documents := tx.Bucket(documentsBucket)
+		metadata := tx.Bucket(metadataBucket)
+
+		for term, postings := range termsData {
+			data, err := encode(postings)
+			if err != nil {
+				return err
+			}
+
+			if err := terms.Put([]byte(term), data); err != nil {
+				return err
+			}
+		}
+
+		for docID, stats := range documentsData {
+			data, err := encode(stats)
+			if err != nil {
+				return err
+			}
+
+			if err := documents.Put([]byte(docID), data); err != nil {
+				return err
+			}
+		}
+
+		data, err := encode(stats)
+		if err != nil {
 			return err
 		}
-	}
 
-	documents := idx.Documents()
-
-	for docID, stats := range documents {
-		if err := s.SaveDocumentStats(docID, stats); err != nil {
+		if err := metadata.Put([]byte("stats"), data); err != nil {
 			return err
 		}
-	}
 
-	return s.SaveStats(idx.Stats())
+		if err := metadata.Put(builtKey, []byte("true")); err != nil {
+			return err
+		}
+
+		if err := metadata.Put(
+			schemaVersionKey,
+			[]byte(currentSchemaVersion),
+		); err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 func (s *Storage) LoadIndex() (*index.InvertedIndex, error) {
@@ -250,4 +293,28 @@ func (s *Storage) loadAllDocuments() (map[string]index.DocumentStats, error) {
 	})
 
 	return documents, err
+}
+
+func (s *Storage) IsIndexReady() (bool, error) {
+	var ready bool
+
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(metadataBucket)
+
+		built := bucket.Get(builtKey)
+		version := bucket.Get(schemaVersionKey)
+
+		if string(built) != "true" {
+			return nil
+		}
+
+		if string(version) != currentSchemaVersion {
+			return nil
+		}
+
+		ready = true
+		return nil
+	})
+
+	return ready, err
 }

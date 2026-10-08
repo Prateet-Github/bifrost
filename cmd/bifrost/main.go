@@ -18,10 +18,6 @@ const dbPath = "bifrost.db"
 func main() {
 	analyzer := analysis.NewAnalyzer()
 
-	// check whether a persisted index already exists
-	_, statErr := os.Stat(dbPath)
-	dbExists := statErr == nil
-
 	store, err := storage.Open(dbPath)
 	if err != nil {
 		fmt.Printf("failed to open storage: %v\n", err)
@@ -31,8 +27,13 @@ func main() {
 
 	var idx *index.InvertedIndex
 
-	if dbExists {
-		// load the existing index from disk
+	ready, err := store.IsIndexReady()
+	if err != nil {
+		fmt.Printf("failed to check index status: %v\n", err)
+		os.Exit(1)
+	}
+
+	if ready {
 		fmt.Println("Loading index from disk...")
 
 		idx, err = store.LoadIndex()
@@ -41,7 +42,6 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		// build a new index from documents
 		fmt.Println("Building index...")
 
 		idx = index.NewInvertedIndex()
@@ -53,7 +53,6 @@ func main() {
 			os.Exit(1)
 		}
 
-		// persist the newly built index
 		if err := store.SaveIndex(idx); err != nil {
 			fmt.Printf("failed to save index: %v\n", err)
 			os.Exit(1)

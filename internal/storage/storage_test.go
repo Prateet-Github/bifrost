@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	"go.etcd.io/bbolt"
+
 	"github.com/Prateet-Github/bifrost/internal/analysis"
 	"github.com/Prateet-Github/bifrost/internal/index"
 )
@@ -242,5 +244,85 @@ func TestSaveAndLoadIndex(t *testing.T) {
 			stats.Length,
 			len(tokens),
 		)
+	}
+}
+
+func TestIsIndexReady(t *testing.T) {
+	path := t.TempDir() + "/bifrost.db"
+
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+	defer store.Close()
+
+	// The database file exists, but the index has not been built
+	ready, err := store.IsIndexReady()
+	if err != nil {
+		t.Fatalf("failed to check index readiness: %v", err)
+	}
+
+	if ready {
+		t.Fatal("index reported ready before being built")
+	}
+
+	// Simulate a successfully persisted index
+	err = store.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(metadataBucket)
+
+		if err := bucket.Put(builtKey, []byte("true")); err != nil {
+			return err
+		}
+
+		return bucket.Put(
+			schemaVersionKey,
+			[]byte(currentSchemaVersion),
+		)
+	})
+
+	if err != nil {
+		t.Fatalf("failed to mark index as built: %v", err)
+	}
+
+	ready, err = store.IsIndexReady()
+	if err != nil {
+		t.Fatalf("failed to check index readiness: %v", err)
+	}
+
+	if !ready {
+		t.Fatal("index reported not ready after being built")
+	}
+}
+
+func TestIsIndexReady_WrongSchemaVersion(t *testing.T) {
+	path := t.TempDir() + "/bifrost.db"
+
+	store, err := Open(path)
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+	defer store.Close()
+
+	err = store.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(metadataBucket)
+
+		if err := bucket.Put(builtKey, []byte("true")); err != nil {
+			return err
+		}
+
+		return bucket.Put(schemaVersionKey, []byte("999"))
+	})
+
+	if err != nil {
+		t.Fatalf("failed to write metadata: %v", err)
+	}
+
+	ready, err := store.IsIndexReady()
+	if err != nil {
+		t.Fatalf("failed to check index readiness: %v", err)
+	}
+
+	if ready {
+		t.Fatal("index reported ready with incompatible schema version")
 	}
 }
