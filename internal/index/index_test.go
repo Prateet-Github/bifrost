@@ -277,3 +277,65 @@ func TestStats(t *testing.T) {
 		)
 	}
 }
+
+func TestAddDocumentReplacesExistingDocument(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	idx.AddDocument("go.txt", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "concurrency", Position: 1},
+		{Text: "goroutines", Position: 2},
+	})
+
+	idx.AddDocument("rust.txt", []tokenizer.Token{
+		{Text: "rust", Position: 0},
+		{Text: "concurrency", Position: 1},
+	})
+
+	idx.AddDocument("go.txt", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "compilation", Position: 1},
+	})
+
+	for _, term := range []string{"concurrency", "goroutines"} {
+		postings := idx.Lookup(term)
+
+		for _, posting := range postings {
+			if posting.DocID == "go.txt" {
+				t.Errorf(
+					"stale posting found: term=%q, docID=%q",
+					term,
+					posting.DocID,
+				)
+			}
+		}
+	}
+
+	postings := idx.Lookup("concurrency")
+
+	if len(postings) != 1 {
+		t.Fatalf("expected 1 concurrency posting, got %d", len(postings))
+	}
+
+	if postings[0].DocID != "rust.txt" {
+		t.Errorf(
+			"expected concurrency to reference rust.txt, got %q",
+			postings[0].DocID,
+		)
+	}
+
+	postings = idx.Lookup("compilation")
+
+	if len(postings) != 1 || postings[0].DocID != "go.txt" {
+		t.Errorf("expected compilation to reference go.txt, got %v", postings)
+	}
+
+	stats, exists := idx.DocumentStats("go.txt")
+	if !exists {
+		t.Fatal("expected go.txt to exist in document statistics")
+	}
+
+	if stats.Length != 2 {
+		t.Errorf("expected document length 2, got %d", stats.Length)
+	}
+}

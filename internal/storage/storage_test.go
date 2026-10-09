@@ -8,6 +8,7 @@ import (
 	"go.etcd.io/bbolt"
 
 	"github.com/Prateet-Github/bifrost/internal/analysis"
+	"github.com/Prateet-Github/bifrost/internal/analysis/tokenizer"
 	"github.com/Prateet-Github/bifrost/internal/index"
 )
 
@@ -365,5 +366,79 @@ func TestSourceFingerprintPersistsAfterReopening(t *testing.T) {
 
 	if actual != expected {
 		t.Fatalf("fingerprint mismatch: got %q, want %q", actual, expected)
+	}
+}
+
+func TestSaveIndexRemovesStalePostings(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+	defer store.Close()
+
+	// Save the original index.
+	original := index.NewInvertedIndex()
+
+	original.AddDocument("go.txt", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "concurrency", Position: 1},
+		{Text: "goroutines", Position: 2},
+	})
+
+	original.AddDocument("rust.txt", []tokenizer.Token{
+		{Text: "rust", Position: 0},
+		{Text: "concurrency", Position: 1},
+	})
+
+	if err := store.SaveIndex(original, "fingerprint-1"); err != nil {
+		t.Fatalf("failed to save original index: %v", err)
+	}
+
+	original.AddDocument("go.txt", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "compilation", Position: 1},
+	})
+
+	if err := store.SaveIndex(original, "fingerprint-2"); err != nil {
+		t.Fatalf("failed to save updated index: %v", err)
+	}
+
+	loaded, err := store.LoadIndex()
+	if err != nil {
+		t.Fatalf("failed to load updated index: %v", err)
+	}
+
+	for _, term := range []string{"concurrency", "goroutines"} {
+		for _, posting := range loaded.Lookup(term) {
+			if posting.DocID == "go.txt" {
+				t.Errorf("stale posting found: term=%q, docID=%q", term, posting.DocID)
+			}
+		}
+	}
+
+	concurrencyPostings := loaded.Lookup("concurrency")
+
+	if len(concurrencyPostings) != 1 ||
+		concurrencyPostings[0].DocID != "rust.txt" {
+		t.Errorf("unexpected concurrency postings: %+v", concurrencyPostings)
+	}
+
+	compilationPostings := loaded.Lookup("compilation")
+
+	if len(compilationPostings) != 1 ||
+		compilationPostings[0].DocID != "go.txt" {
+		t.Errorf("unexpected compilation postings: %+v", compilationPostings)
+	}
+
+	stats, exists := loaded.DocumentStats("go.txt")
+
+	if !exists {
+		t.Fatal("go.txt missing from document statistics")
+	}
+
+	if stats.Length != 2 {
+		t.Errorf("expected document length 2, got %d", stats.Length)
 	}
 }

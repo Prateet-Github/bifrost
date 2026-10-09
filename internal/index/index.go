@@ -28,6 +28,8 @@ func (idx *InvertedIndex) AddDocument(
 	docID string,
 	tokens []tokenizer.Token,
 ) {
+	idx.Remove(docID)
+
 	idx.documents[docID] = DocumentStats{
 		Length: len(tokens),
 	}
@@ -88,4 +90,25 @@ func (idx *InvertedIndex) SetDocumentStats(
 	stats DocumentStats,
 ) {
 	idx.documents[docID] = stats
+}
+
+func (idx *InvertedIndex) Remove(docID string) {
+	for term, postings := range idx.terms {
+		remaining := postings[:0]
+
+		for _, posting := range postings {
+			if posting.DocID != docID {
+				remaining = append(remaining, posting)
+			}
+		}
+
+		if len(remaining) == 0 {
+			delete(idx.terms, term)
+			continue
+		}
+
+		idx.terms[term] = remaining
+	}
+
+	delete(idx.documents, docID)
 }

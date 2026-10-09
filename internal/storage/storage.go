@@ -176,6 +176,25 @@ func (s *Storage) SaveIndex(idx *index.InvertedIndex, fingerprint string) error 
 	stats := idx.Stats()
 
 	return s.db.Update(func(tx *bbolt.Tx) error {
+
+		if err := tx.DeleteBucket(termsBucket); err != nil &&
+			err != bbolt.ErrBucketNotFound {
+			return err
+		}
+
+		if _, err := tx.CreateBucket(termsBucket); err != nil {
+			return err
+		}
+
+		if err := tx.DeleteBucket(documentsBucket); err != nil &&
+			err != bbolt.ErrBucketNotFound {
+			return err
+		}
+
+		if _, err := tx.CreateBucket(documentsBucket); err != nil {
+			return err
+		}
+
 		terms := tx.Bucket(termsBucket)
 		documents := tx.Bucket(documentsBucket)
 		metadata := tx.Bucket(metadataBucket)
@@ -212,6 +231,10 @@ func (s *Storage) SaveIndex(idx *index.InvertedIndex, fingerprint string) error 
 		}
 
 		if err := metadata.Put(builtKey, []byte("true")); err != nil {
+			return err
+		}
+
+		if err := metadata.Put(schemaVersionKey, []byte(currentSchemaVersion)); err != nil {
 			return err
 		}
 
