@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -144,7 +145,7 @@ func TestSaveIndex(t *testing.T) {
 
 	idx.AddDocument("go.txt", tokens)
 
-	err = store.SaveIndex(idx)
+	err = store.SaveIndex(idx, "test-fingerprint")
 	if err != nil {
 		t.Fatalf("failed to save index: %v", err)
 	}
@@ -193,7 +194,7 @@ func TestSaveAndLoadIndex(t *testing.T) {
 		t.Fatalf("failed to open storage: %v", err)
 	}
 
-	if err := store.SaveIndex(original); err != nil {
+	if err := store.SaveIndex(original, "test-fingerprint"); err != nil {
 		t.Fatalf("failed to save index: %v", err)
 	}
 
@@ -324,5 +325,45 @@ func TestIsIndexReady_WrongSchemaVersion(t *testing.T) {
 
 	if ready {
 		t.Fatal("index reported ready with incompatible schema version")
+	}
+}
+
+func TestSourceFingerprintPersistsAfterReopening(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	// Open storage.
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+
+	// Save an index and its source fingerprint
+	idx := index.NewInvertedIndex()
+	expected := "test-fingerprint-123"
+
+	if err := store.SaveIndex(idx, expected); err != nil {
+		t.Fatalf("failed to save index: %v", err)
+	}
+
+	// Close the database to simulate application shutdown
+	if err := store.Close(); err != nil {
+		t.Fatalf("failed to close storage: %v", err)
+	}
+
+	// Reopen the same database.
+	store, err = Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to reopen storage: %v", err)
+	}
+	defer store.Close()
+
+	// Verify that the fingerprint was persisted
+	actual, err := store.LoadSourceFingerprint()
+	if err != nil {
+		t.Fatalf("failed to load source fingerprint: %v", err)
+	}
+
+	if actual != expected {
+		t.Fatalf("fingerprint mismatch: got %q, want %q", actual, expected)
 	}
 }

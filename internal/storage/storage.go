@@ -15,8 +15,9 @@ var (
 )
 
 var (
-	builtKey         = []byte("built")
-	schemaVersionKey = []byte("schema_version")
+	builtKey             = []byte("built")
+	schemaVersionKey     = []byte("schema_version")
+	sourceFingerprintKey = []byte("source_fingerprint")
 )
 
 const currentSchemaVersion = "1"
@@ -169,7 +170,7 @@ func (s *Storage) LoadStats() (index.Stats, error) {
 	return stats, err
 }
 
-func (s *Storage) SaveIndex(idx *index.InvertedIndex) error {
+func (s *Storage) SaveIndex(idx *index.InvertedIndex, fingerprint string) error {
 	termsData := idx.Terms()
 	documentsData := idx.Documents()
 	stats := idx.Stats()
@@ -214,10 +215,7 @@ func (s *Storage) SaveIndex(idx *index.InvertedIndex) error {
 			return err
 		}
 
-		if err := metadata.Put(
-			schemaVersionKey,
-			[]byte(currentSchemaVersion),
-		); err != nil {
+		if err := metadata.Put(sourceFingerprintKey, []byte(fingerprint)); err != nil {
 			return err
 		}
 
@@ -317,4 +315,29 @@ func (s *Storage) IsIndexReady() (bool, error) {
 	})
 
 	return ready, err
+}
+
+func (s *Storage) SaveSourceFingerprint(fingerprint string) error {
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(metadataBucket)
+		return bucket.Put(sourceFingerprintKey, []byte(fingerprint))
+	})
+}
+
+func (s *Storage) LoadSourceFingerprint() (string, error) {
+	var fingerprint string
+
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(metadataBucket)
+
+		value := bucket.Get(sourceFingerprintKey)
+		if value == nil {
+			return nil
+		}
+
+		fingerprint = string(value)
+		return nil
+	})
+
+	return fingerprint, err
 }
