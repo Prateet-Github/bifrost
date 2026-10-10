@@ -1,0 +1,33 @@
+Bifrost — Query Scoring Optimization
+
+Hardware: Apple M2
+OS/Architecture: darwin/arm64
+Query: distributed systems concurrency
+Top-K: 10
+Benchmark mode: -benchtime=3x
+
+Command:
+go test -run '^$' -bench='BenchmarkSearch' -benchmem -benchtime=3x ./internal/search
+
+Documents: 1,000
+Latency: 646,139 ns/op
+Memory: 671,226 B/op
+Allocations: 4,040 allocs/op
+
+Documents: 10,000
+Latency: 4,423,917 ns/op
+Memory: 6,481,370 B/op
+Allocations: 40,099 allocs/op
+
+Documents: 100,000
+Latency: 60,035,625 ns/op
+Memory: 62,996,570 B/op
+Allocations: 400,550 allocs/op
+
+Notes:
+- Each benchmark ran for three iterations.
+- Corpus construction is excluded from ns/op but contributes to total benchmark runtime.
+- The query matches nearly all generated documents.
+- Candidate postings are reused during scoring.
+- Collection statistics and IDF values are prepared once per query.
+- Results are compared against the original Bifrost v0.2.0 baseline.

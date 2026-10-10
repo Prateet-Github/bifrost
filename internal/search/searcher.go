@@ -3,6 +3,7 @@ package search
 import (
 	"sort"
 
+	"github.com/Prateet-Github/bifrost/internal/analysis/tokenizer"
 	"github.com/Prateet-Github/bifrost/internal/index"
 	"github.com/Prateet-Github/bifrost/internal/query"
 	"github.com/Prateet-Github/bifrost/internal/scoring"
@@ -40,6 +41,10 @@ func NewSearcher(idx *index.InvertedIndex) *Searcher {
 func (s *Searcher) Candidates(rawQuery string) []Candidate {
 	tokens := s.queryAnalyzer.Analyze(rawQuery)
 
+	return s.candidates(tokens)
+}
+
+func (s *Searcher) candidates(tokens []tokenizer.Token) []Candidate {
 	candidates := make(map[string]*Candidate)
 
 	for _, token := range tokens {
@@ -79,21 +84,34 @@ func (s *Searcher) Search(rawQuery string, k int) []Result {
 		return nil
 	}
 
-	candidates := s.Candidates(rawQuery)
+	candidates := s.candidates(tokens)
+
+	terms := make([]string, 0, len(tokens))
+
+	for _, token := range tokens {
+		terms = append(terms, token.Text)
+	}
+
+	// Prepare collection statistics and IDF values once per query.
+	queryScorer := s.scorer.PrepareQuery(terms)
 
 	results := make([]Result, 0, len(candidates))
 
 	for _, candidate := range candidates {
-		terms := make([]string, 0, len(candidate.Matches))
+		doc, exists := s.index.DocumentStats(candidate.DocID)
 
-		for _, match := range candidate.Matches {
-			terms = append(terms, match.Term)
+		var score float64
+
+		if exists {
+			// Reuse the postings already retrieved during candidate generation.
+			for _, match := range candidate.Matches {
+				score += queryScorer.ScoreTerm(
+					match.Term,
+					match.Posting.TermFreq,
+					doc.Length,
+				)
+			}
 		}
-
-		score := s.scorer.Score(
-			terms,
-			candidate.DocID,
-		)
 
 		results = append(results, Result{
 			DocID: candidate.DocID,

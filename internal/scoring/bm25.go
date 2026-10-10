@@ -12,6 +12,12 @@ type BM25 struct {
 	index *index.InvertedIndex
 }
 
+type QueryScorer struct {
+	bm25         *BM25
+	avgDocLength float64
+	idfCache     map[string]float64
+}
+
 func NewBM25(idx *index.InvertedIndex) *BM25 {
 	return &BM25{
 		K1:    1.2,
@@ -23,10 +29,7 @@ func NewBM25(idx *index.InvertedIndex) *BM25 {
 func (b *BM25) IDF(term string) float64 {
 	stats := b.index.Stats()
 
-	return b.idf(
-		term,
-		stats.Documents,
-	)
+	return b.idf(term, stats.Documents)
 }
 
 func (b *BM25) idf(term string, totalDocuments int) float64 {
@@ -74,6 +77,56 @@ func (b *BM25) TermScore(
 	return idf * tfScore
 }
 
+// PrepareQuery calculates the scoring data that can be reused
+// across all candidate documents for a query.
+func (b *BM25) PrepareQuery(terms []string) *QueryScorer {
+	stats := b.index.Stats()
+
+	scorer := &QueryScorer{
+		bm25:         b,
+		avgDocLength: stats.AverageDocLength,
+		idfCache:     make(map[string]float64, len(terms)),
+	}
+
+	for _, term := range terms {
+		if _, exists := scorer.idfCache[term]; exists {
+			continue
+		}
+
+		scorer.idfCache[term] = b.idf(
+			term,
+			stats.Documents,
+		)
+	}
+
+	return scorer
+}
+
+// ScoreTerm scores a term using the prepared query-scoring data.
+func (q *QueryScorer) ScoreTerm(
+	term string,
+	tf int,
+	docLength int,
+) float64 {
+	if tf == 0 {
+		return 0
+	}
+
+	idf, exists := q.idfCache[term]
+	if !exists {
+		return 0
+	}
+
+	tfScore := q.bm25.TermFrequencyScore(
+		tf,
+		docLength,
+		q.avgDocLength,
+	)
+
+	return idf * tfScore
+}
+
+// Score retains the existing API for callers that score a document directly.
 func (b *BM25) Score(
 	terms []string,
 	docID string,
@@ -83,31 +136,20 @@ func (b *BM25) Score(
 		return 0
 	}
 
-	stats := b.index.Stats()
-
-	idfCache := make(map[string]float64, len(terms))
+	queryScorer := b.PrepareQuery(terms)
 
 	var score float64
 
 	for _, term := range terms {
-		idf, cached := idfCache[term]
-
-		if !cached {
-			idf = b.idf(term, stats.Documents)
-			idfCache[term] = idf
-		}
-
 		postings := b.index.Lookup(term)
 
 		for _, posting := range postings {
 			if posting.DocID == docID {
-				tfScore := b.TermFrequencyScore(
+				score += queryScorer.ScoreTerm(
+					term,
 					posting.TermFreq,
 					doc.Length,
-					stats.AverageDocLength,
 				)
-
-				score += idf * tfScore
 				break
 			}
 		}
