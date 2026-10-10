@@ -23,11 +23,18 @@ func NewBM25(idx *index.InvertedIndex) *BM25 {
 func (b *BM25) IDF(term string) float64 {
 	stats := b.index.Stats()
 
-	N := stats.Documents
-	DF := b.index.DocumentFrequency(term)
+	return b.idf(
+		term,
+		stats.Documents,
+	)
+}
+
+func (b *BM25) idf(term string, totalDocuments int) float64 {
+	df := b.index.DocumentFrequency(term)
 
 	return math.Log(
-		1 + (float64(N)-float64(DF)+0.5)/(float64(DF)+0.5),
+		1 + (float64(totalDocuments)-float64(df)+0.5)/
+			(float64(df)+0.5),
 	)
 }
 
@@ -54,9 +61,9 @@ func (b *BM25) TermScore(
 	tf int,
 	docLength int,
 ) float64 {
-	idf := b.IDF(term)
-
 	stats := b.index.Stats()
+
+	idf := b.idf(term, stats.Documents)
 
 	tfScore := b.TermFrequencyScore(
 		tf,
@@ -76,18 +83,31 @@ func (b *BM25) Score(
 		return 0
 	}
 
+	stats := b.index.Stats()
+
+	idfCache := make(map[string]float64, len(terms))
+
 	var score float64
 
 	for _, term := range terms {
+		idf, cached := idfCache[term]
+
+		if !cached {
+			idf = b.idf(term, stats.Documents)
+			idfCache[term] = idf
+		}
+
 		postings := b.index.Lookup(term)
 
 		for _, posting := range postings {
 			if posting.DocID == docID {
-				score += b.TermScore(
-					term,
+				tfScore := b.TermFrequencyScore(
 					posting.TermFreq,
 					doc.Length,
+					stats.AverageDocLength,
 				)
+
+				score += idf * tfScore
 				break
 			}
 		}

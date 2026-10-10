@@ -1,0 +1,30 @@
+Bifrost Search Benchmark — P1 BM25 Optimization
+
+Environment:
+- CPU: Apple M2
+- OS: macOS
+- Architecture: arm64
+- Iterations: 1
+- Command: go test -run '^$' -bench='BenchmarkSearch' -benchmem -benchtime=1x ./internal/search
+
+Results:
+BenchmarkSearch/Docs1000-8
+  6,370,500 ns/op
+  719,624 B/op
+  5,049 allocs/op
+
+BenchmarkSearch/Docs10000-8
+  302,775,500 ns/op
+  6,961,544 B/op
+  50,106 allocs/op
+
+BenchmarkSearch/Docs100000-8
+  38,330,811,875 ns/op
+  67,796,744 B/op
+  500,557 allocs/op
+
+Notes:
+- Single-iteration measurements; results are preliminary.
+- Synthetic broad-match query: distributed systems concurrency.
+- All documents match all three query terms.
+- Compared against the original Phase 0 baseline.
