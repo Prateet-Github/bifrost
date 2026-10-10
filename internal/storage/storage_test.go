@@ -1,15 +1,16 @@
 package storage
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 
-	"go.etcd.io/bbolt"
-
 	"github.com/Prateet-Github/bifrost/internal/analysis"
 	"github.com/Prateet-Github/bifrost/internal/analysis/tokenizer"
 	"github.com/Prateet-Github/bifrost/internal/index"
+	"go.etcd.io/bbolt"
 )
 
 func TestOpen(t *testing.T) {
@@ -460,5 +461,70 @@ func TestSaveIndexRemovesStalePostings(t *testing.T) {
 
 	if stats.Length != 2 {
 		t.Errorf("expected document length 2, got %d", stats.Length)
+	}
+}
+
+func BenchmarkSaveIndex(b *testing.B) {
+	sizes := []int{1_000, 10_000, 100_000}
+
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("Docs%d", size), func(b *testing.B) {
+			analyzer := analysis.NewAnalyzer()
+			idx := index.NewInvertedIndex()
+
+			// Build the index outside the timed section.
+			for i := 0; i < size; i++ {
+				text := fmt.Sprintf(
+					"distributed systems use concurrency and networking document number %d contains searchable content with indexing ranking retrieval and storage",
+					i,
+				)
+
+				tokens := analyzer.Analyze(text)
+				docID := fmt.Sprintf("doc-%06d.txt", i)
+
+				idx.AddDocument(docID, tokens)
+			}
+
+			b.ReportMetric(float64(size), "documents")
+
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				// Each iteration uses a fresh database so the benchmark
+				// measures a full index save, not a replacement of an
+				// already populated index.
+				b.StopTimer()
+
+				dir := b.TempDir()
+				dbPath := filepath.Join(dir, "bifrost.db")
+
+				store, err := Open(dbPath)
+				if err != nil {
+					b.Fatal(err)
+				}
+
+				b.StartTimer()
+
+				err = store.SaveIndex(idx, "benchmark-fingerprint")
+
+				b.StopTimer()
+
+				if err != nil {
+					store.Close()
+					b.Fatal(err)
+				}
+
+				if err := store.Close(); err != nil {
+					b.Fatal(err)
+				}
+
+				info, err := os.Stat(dbPath)
+				if err != nil {
+					b.Fatal(err)
+				}
+
+				b.ReportMetric(float64(info.Size()), "db-bytes")
+			}
+		})
 	}
 }

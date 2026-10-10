@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"encoding/gob"
+	"sort"
 
 	"github.com/Prateet-Github/bifrost/internal/index"
 	"go.etcd.io/bbolt"
@@ -199,7 +200,20 @@ func (s *Storage) SaveIndex(idx *index.InvertedIndex, fingerprint string) error 
 		documents := tx.Bucket(documentsBucket)
 		metadata := tx.Bucket(metadataBucket)
 
-		for term, postings := range termsData {
+		terms.FillPercent = 1.0
+		documents.FillPercent = 1.0
+
+		termKeys := make([]string, 0, len(termsData))
+
+		for term := range termsData {
+			termKeys = append(termKeys, term)
+		}
+
+		sort.Strings(termKeys)
+
+		for _, term := range termKeys {
+			postings := termsData[term]
+
 			data, err := encode(postings)
 			if err != nil {
 				return err
@@ -210,7 +224,17 @@ func (s *Storage) SaveIndex(idx *index.InvertedIndex, fingerprint string) error 
 			}
 		}
 
-		for docID, stats := range documentsData {
+		documentIDs := make([]string, 0, len(documentsData))
+
+		for docID := range documentsData {
+			documentIDs = append(documentIDs, docID)
+		}
+
+		sort.Strings(documentIDs)
+
+		for _, docID := range documentIDs {
+			stats := documentsData[docID]
+
 			data, err := encode(stats)
 			if err != nil {
 				return err

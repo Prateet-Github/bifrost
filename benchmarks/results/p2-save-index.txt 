@@ -1,0 +1,26 @@
+Bifrost P2: SaveIndex benchmark
+Platform: Apple M2
+OS: darwin
+Architecture: arm64
+
+Command:
+go test -run '^$' -bench='BenchmarkSaveIndex' -benchmem -benchtime=1x ./internal/storage
+
+Results:
+BenchmarkSaveIndex/Docs1000-8
+15955667 ns/op
+1048576 db-bytes
+8916232 B/op
+63222 allocs/op
+
+BenchmarkSaveIndex/Docs10000-8
+71813959 ns/op
+8388608 db-bytes
+115398024 B/op
+862710 allocs/op
+
+BenchmarkSaveIndex/Docs100000-8
+737631041 ns/op
+69468160 db-bytes
+1525430128 B/op
+11015026 allocs/op
