@@ -412,3 +412,34 @@ func TestStatsAfterDocumentReplacement(t *testing.T) {
 		t.Fatalf("expected average length 1, got %f", stats.AverageDocLength)
 	}
 }
+
+func TestSetDocumentStatsUpdatesTotalDocumentLength(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	idx.SetDocumentStats("doc1", DocumentStats{Length: 100})
+	idx.SetDocumentStats("doc2", DocumentStats{Length: 200})
+
+	stats := idx.Stats()
+
+	if stats.Documents != 2 {
+		t.Fatalf("expected 2 documents, got %d", stats.Documents)
+	}
+
+	if stats.AverageDocLength != 150 {
+		t.Fatalf(
+			"expected average document length 150, got %f",
+			stats.AverageDocLength,
+		)
+	}
+
+	idx.SetDocumentStats("doc1", DocumentStats{Length: 200})
+
+	stats = idx.Stats()
+
+	if stats.AverageDocLength != 200 {
+		t.Fatalf(
+			"expected average document length 200 after replacement, got %f",
+			stats.AverageDocLength,
+		)
+	}
+}

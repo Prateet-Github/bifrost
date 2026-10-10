@@ -247,6 +247,26 @@ func TestSaveAndLoadIndex(t *testing.T) {
 			len(tokens),
 		)
 	}
+
+	originalStats := original.Stats()
+	loadedStats := loaded.Stats()
+
+	if loadedStats.Documents != originalStats.Documents {
+		t.Errorf(
+			"document count after loading = %d, want %d",
+			loadedStats.Documents,
+			originalStats.Documents,
+		)
+	}
+
+	if loadedStats.AverageDocLength != originalStats.AverageDocLength {
+		t.Errorf(
+			"average document length after loading = %f, want %f",
+			loadedStats.AverageDocLength,
+			originalStats.AverageDocLength,
+		)
+	}
+
 }
 
 func TestIsIndexReady(t *testing.T) {

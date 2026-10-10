@@ -94,7 +94,12 @@ func (idx *InvertedIndex) SetDocumentStats(
 	docID string,
 	stats DocumentStats,
 ) {
+	if existing, exists := idx.documents[docID]; exists {
+		idx.totalDocumentLength -= existing.Length
+	}
+
 	idx.documents[docID] = stats
+	idx.totalDocumentLength += stats.Length
 }
 
 func (idx *InvertedIndex) Remove(docID string) {
