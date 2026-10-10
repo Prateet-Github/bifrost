@@ -10,18 +10,15 @@ func (idx *InvertedIndex) DocumentFrequency(term string) int {
 }
 
 func (idx *InvertedIndex) Stats() Stats {
-	if len(idx.documents) == 0 {
+	documentCount := len(idx.documents)
+
+	if documentCount == 0 {
 		return Stats{}
 	}
 
-	totalLength := 0
-
-	for _, doc := range idx.documents {
-		totalLength += doc.Length
-	}
-
 	return Stats{
-		Documents:        len(idx.documents),
-		AverageDocLength: float64(totalLength) / float64(len(idx.documents)),
+		Documents: documentCount,
+		AverageDocLength: float64(idx.totalDocumentLength) /
+			float64(documentCount),
 	}
 }

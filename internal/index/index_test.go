@@ -339,3 +339,76 @@ func TestAddDocumentReplacesExistingDocument(t *testing.T) {
 		t.Errorf("expected document length 2, got %d", stats.Length)
 	}
 }
+
+func TestStatsAfterAddAndRemove(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	idx.AddDocument("doc1", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "systems", Position: 1},
+	})
+
+	idx.AddDocument("doc2", []tokenizer.Token{
+		{Text: "rust", Position: 0},
+		{Text: "safe", Position: 1},
+		{Text: "fast", Position: 2},
+	})
+
+	stats := idx.Stats()
+
+	if stats.Documents != 2 {
+		t.Fatalf("expected 2 documents, got %d", stats.Documents)
+	}
+
+	if stats.AverageDocLength != 2.5 {
+		t.Fatalf("expected average length 2.5, got %f", stats.AverageDocLength)
+	}
+
+	idx.Remove("doc1")
+
+	stats = idx.Stats()
+
+	if stats.Documents != 1 {
+		t.Fatalf("expected 1 document, got %d", stats.Documents)
+	}
+
+	if stats.AverageDocLength != 3 {
+		t.Fatalf("expected average length 3, got %f", stats.AverageDocLength)
+	}
+
+	idx.Remove("doc2")
+
+	stats = idx.Stats()
+
+	if stats.Documents != 0 {
+		t.Fatalf("expected 0 documents, got %d", stats.Documents)
+	}
+
+	if stats.AverageDocLength != 0 {
+		t.Fatalf("expected average length 0, got %f", stats.AverageDocLength)
+	}
+}
+
+func TestStatsAfterDocumentReplacement(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	idx.AddDocument("doc1", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "systems", Position: 1},
+		{Text: "concurrency", Position: 2},
+	})
+
+	idx.AddDocument("doc1", []tokenizer.Token{
+		{Text: "go", Position: 0},
+	})
+
+	stats := idx.Stats()
+
+	if stats.Documents != 1 {
+		t.Fatalf("expected 1 document, got %d", stats.Documents)
+	}
+
+	if stats.AverageDocLength != 1 {
+		t.Fatalf("expected average length 1, got %f", stats.AverageDocLength)
+	}
+}

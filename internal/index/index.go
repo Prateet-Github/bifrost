@@ -13,8 +13,9 @@ type DocumentStats struct {
 }
 
 type InvertedIndex struct {
-	terms     map[string][]Posting
-	documents map[string]DocumentStats
+	terms               map[string][]Posting
+	documents           map[string]DocumentStats
+	totalDocumentLength int
 }
 
 func NewInvertedIndex() *InvertedIndex {
@@ -30,9 +31,13 @@ func (idx *InvertedIndex) AddDocument(
 ) {
 	idx.Remove(docID)
 
+	docLength := len(tokens)
+
 	idx.documents[docID] = DocumentStats{
-		Length: len(tokens),
+		Length: docLength,
 	}
+
+	idx.totalDocumentLength += docLength
 
 	for _, token := range tokens {
 		postings := idx.terms[token.Text]
@@ -93,6 +98,13 @@ func (idx *InvertedIndex) SetDocumentStats(
 }
 
 func (idx *InvertedIndex) Remove(docID string) {
+	doc, exists := idx.documents[docID]
+	if !exists {
+		return
+	}
+
+	idx.totalDocumentLength -= doc.Length
+
 	for term, postings := range idx.terms {
 		remaining := postings[:0]
 
