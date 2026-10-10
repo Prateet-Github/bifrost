@@ -1,0 +1,27 @@
+Bifrost v0.2.0 — Search Baseline
+
+Hardware: Apple M2
+OS/Architecture: darwin/arm64
+Query: distributed systems concurrency
+Top-K: 10
+Benchmark mode: -benchtime=1x
+
+Documents: 1,000
+Latency: 45.20 ms/op
+Memory: 719,400 B/op
+Allocations: 5,047 allocs/op
+
+Documents: 10,000
+Latency: 4.022 s/op
+Memory: 6,961,656 B/op
+Allocations: 50,107 allocs/op
+
+Documents: 100,000
+Latency: 376.072 s/op
+Memory: 67,796,744 B/op
+Allocations: 500,557 allocs/op
+
+Note:
+These are single-iteration measurements. Corpus construction
+is excluded from ns/op but contributes to total benchmark runtime.
+The query matches nearly all generated documents.

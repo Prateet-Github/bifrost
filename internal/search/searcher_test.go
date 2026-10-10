@@ -1,6 +1,7 @@
 package search
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Prateet-Github/bifrost/internal/analysis"
@@ -287,6 +288,47 @@ func TestSearchRankingRegression(t *testing.T) {
 					results[0].DocID,
 					tt.expectedTopID,
 				)
+			}
+		})
+	}
+}
+
+func generateBenchmarkIndex(b *testing.B, count int) *index.InvertedIndex {
+	b.Helper()
+
+	analyzer := analysis.NewAnalyzer()
+	idx := index.NewInvertedIndex()
+
+	for i := 0; i < count; i++ {
+		docID := fmt.Sprintf("doc-%06d", i)
+
+		body := fmt.Sprintf(
+			"distributed systems use concurrency and networking "+
+				"document number %d contains searchable content "+
+				"with indexing ranking retrieval and storage",
+			i,
+		)
+
+		tokens := analyzer.Analyze(body)
+		idx.AddDocument(docID, tokens)
+	}
+
+	return idx
+}
+
+func BenchmarkSearch(b *testing.B) {
+	sizes := []int{1_000, 10_000, 100_000}
+
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("Docs%d", size), func(b *testing.B) {
+			idx := generateBenchmarkIndex(b, size)
+			searcher := NewSearcher(idx)
+
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				searcher.Search("distributed systems concurrency", 10)
 			}
 		})
 	}
