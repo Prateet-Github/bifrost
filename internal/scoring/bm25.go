@@ -77,8 +77,6 @@ func (b *BM25) TermScore(
 	return idf * tfScore
 }
 
-// PrepareQuery calculates the scoring data that can be reused
-// across all candidate documents for a query.
 func (b *BM25) PrepareQuery(terms []string) *QueryScorer {
 	stats := b.index.Stats()
 
@@ -102,7 +100,6 @@ func (b *BM25) PrepareQuery(terms []string) *QueryScorer {
 	return scorer
 }
 
-// ScoreTerm scores a term using the prepared query-scoring data.
 func (q *QueryScorer) ScoreTerm(
 	term string,
 	tf int,
@@ -124,36 +121,4 @@ func (q *QueryScorer) ScoreTerm(
 	)
 
 	return idf * tfScore
-}
-
-// Score retains the existing API for callers that score a document directly.
-func (b *BM25) Score(
-	terms []string,
-	docID string,
-) float64 {
-	doc, exists := b.index.DocumentStats(docID)
-	if !exists {
-		return 0
-	}
-
-	queryScorer := b.PrepareQuery(terms)
-
-	var score float64
-
-	for _, term := range terms {
-		postings := b.index.Lookup(term)
-
-		for _, posting := range postings {
-			if posting.DocID == docID {
-				score += queryScorer.ScoreTerm(
-					term,
-					posting.TermFreq,
-					doc.Length,
-				)
-				break
-			}
-		}
-	}
-
-	return score
 }

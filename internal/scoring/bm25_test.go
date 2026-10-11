@@ -131,7 +131,7 @@ func TestBM25RareTermScoresHigher(t *testing.T) {
 	}
 }
 
-func TestBM25Score(t *testing.T) {
+func TestBM25PreparedQueryScoresDocumentTerms(t *testing.T) {
 	idx := index.NewInvertedIndex()
 
 	idx.AddDocument("D1", []tokenizer.Token{
@@ -145,16 +145,22 @@ func TestBM25Score(t *testing.T) {
 	})
 
 	bm25 := NewBM25(idx)
+	queryScorer := bm25.PrepareQuery([]string{"go", "server"})
 
-	scoreD1 := bm25.Score(
-		[]string{"go", "server"},
-		"D1",
-	)
+	doc1, exists := idx.DocumentStats("D1")
+	if !exists {
+		t.Fatal("expected document D1 to exist")
+	}
 
-	scoreD2 := bm25.Score(
-		[]string{"go", "server"},
-		"D2",
-	)
+	doc2, exists := idx.DocumentStats("D2")
+	if !exists {
+		t.Fatal("expected document D2 to exist")
+	}
+
+	scoreD1 := queryScorer.ScoreTerm("go", 2, doc1.Length) +
+		queryScorer.ScoreTerm("server", 1, doc1.Length)
+
+	scoreD2 := queryScorer.ScoreTerm("go", 1, doc2.Length)
 
 	if scoreD1 <= 0 {
 		t.Fatalf("expected positive score for D1, got %f", scoreD1)
