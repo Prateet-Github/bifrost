@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/Prateet-Github/bifrost/internal/analysis"
 	"github.com/Prateet-Github/bifrost/internal/analysis/tokenizer"
+	"github.com/Prateet-Github/bifrost/internal/codec"
 	"github.com/Prateet-Github/bifrost/internal/index"
 	"go.etcd.io/bbolt"
 )
@@ -24,43 +26,6 @@ func TestOpen(t *testing.T) {
 
 	if store.db == nil {
 		t.Fatal("expected database, got nil")
-	}
-}
-
-func TestSaveAndLoadPostings(t *testing.T) {
-	path := t.TempDir() + "/bifrost.db"
-
-	store, err := Open(path)
-	if err != nil {
-		t.Fatalf("failed to open storage: %v", err)
-	}
-	defer store.Close()
-
-	expected := []index.Posting{
-		{
-			DocID:     "D1",
-			TermFreq:  2,
-			Positions: []int{1, 4},
-		},
-		{
-			DocID:     "D2",
-			TermFreq:  1,
-			Positions: []int{3},
-		},
-	}
-
-	err = store.SavePostings("search", expected)
-	if err != nil {
-		t.Fatalf("failed to save postings: %v", err)
-	}
-
-	actual, err := store.LoadPostings("search")
-	if err != nil {
-		t.Fatalf("failed to load postings: %v", err)
-	}
-
-	if !reflect.DeepEqual(actual, expected) {
-		t.Fatalf("loaded postings = %+v, want %+v", actual, expected)
 	}
 }
 
@@ -353,7 +318,7 @@ func TestIsIndexReady_WrongSchemaVersion(t *testing.T) {
 func TestSourceFingerprintPersistsAfterReopening(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 
-	// Open storage.
+	// Open storage
 	store, err := Open(dbPath)
 	if err != nil {
 		t.Fatalf("failed to open storage: %v", err)
@@ -490,9 +455,6 @@ func BenchmarkSaveIndex(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				// Each iteration uses a fresh database so the benchmark
-				// measures a full index save, not a replacement of an
-				// already populated index.
 				b.StopTimer()
 
 				dir := b.TempDir()
@@ -526,5 +488,169 @@ func BenchmarkSaveIndex(b *testing.B) {
 				b.ReportMetric(float64(info.Size()), "db-bytes")
 			}
 		})
+	}
+}
+
+func TestSaveAndLoadIndexPreservesPostingDetails(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+	defer store.Close()
+
+	idx := index.NewInvertedIndex()
+
+	idx.AddDocument("alpha.txt", []tokenizer.Token{
+		{Text: "search", Position: 0},
+		{Text: "engine", Position: 1},
+		{Text: "search", Position: 2},
+	})
+
+	idx.AddDocument("beta.txt", []tokenizer.Token{
+		{Text: "search", Position: 0},
+		{Text: "systems", Position: 1},
+	})
+
+	if err := store.SaveIndex(idx, "test-fingerprint"); err != nil {
+		t.Fatalf("failed to save index: %v", err)
+	}
+
+	loaded, err := store.LoadIndex()
+	if err != nil {
+		t.Fatalf("failed to load index: %v", err)
+	}
+
+	for _, term := range []string{"search", "engine", "systems"} {
+		expected := idx.Lookup(term)
+		actual := loaded.Lookup(term)
+
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf(
+				"postings for %q differ after reload:\ngot:  %+v\nwant: %+v",
+				term,
+				actual,
+				expected,
+			)
+		}
+	}
+}
+
+func TestSaveIndexUsesCompactPostingFormat(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+	defer store.Close()
+
+	idx := index.NewInvertedIndex()
+	idx.AddDocument("alpha.txt", []tokenizer.Token{
+		{Text: "search", Position: 0},
+	})
+
+	if err := store.SaveIndex(idx, "test-fingerprint"); err != nil {
+		t.Fatalf("failed to save index: %v", err)
+	}
+
+	err = store.db.View(func(tx *bbolt.Tx) error {
+		terms := tx.Bucket(termsBucket)
+		data := terms.Get([]byte("search"))
+
+		if data == nil {
+			t.Fatal("compact posting data not found")
+		}
+
+		if !bytes.HasPrefix(data, compactPostingMagic) {
+			t.Fatalf("posting data does not have compact format marker")
+		}
+
+		decoded, err := codec.DecodePostings(
+			data[len(compactPostingMagic):],
+		)
+		if err != nil {
+			t.Fatalf("failed to decode compact postings: %v", err)
+		}
+
+		if len(decoded) != 1 {
+			t.Fatalf("posting count = %d, want 1", len(decoded))
+		}
+
+		if decoded[0].DocID != 1 {
+			t.Errorf("numeric document ID = %d, want 1", decoded[0].DocID)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("failed to inspect stored postings: %v", err)
+	}
+}
+
+func TestLoadIndexRejectsCorruptedPostings(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+	defer store.Close()
+
+	idx := index.NewInvertedIndex()
+	idx.AddDocument("alpha.txt", []tokenizer.Token{
+		{Text: "search", Position: 0},
+	})
+
+	if err := store.SaveIndex(idx, "test-fingerprint"); err != nil {
+		t.Fatalf("failed to save index: %v", err)
+	}
+
+	// Replace the valid compact posting with malformed data.
+	err = store.db.Update(func(tx *bbolt.Tx) error {
+		terms := tx.Bucket(termsBucket)
+
+		corrupted := append(
+			append([]byte(nil), compactPostingMagic...),
+			0xFF,
+		)
+
+		return terms.Put([]byte("search"), corrupted)
+	})
+	if err != nil {
+		t.Fatalf("failed to corrupt posting data: %v", err)
+	}
+
+	_, err = store.LoadIndex()
+	if err == nil {
+		t.Fatal("expected an error when loading corrupted postings")
+	}
+}
+
+func TestLoadIndexRejectsMissingDocumentMapping(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+	defer store.Close()
+
+	idx := index.NewInvertedIndex()
+	idx.AddDocument("alpha.txt", []tokenizer.Token{
+		{Text: "search", Position: 0},
+	})
+
+	if err := store.SaveIndex(idx, "test-fingerprint"); err != nil {
+		t.Fatalf("failed to save index: %v", err)
+	}
+
+	// The only document receives numeric ID 1.
+	err = store.db.Update(func(tx *bbolt.Tx) error {
+		docIDs := tx.Bucket(docIDsBucket)
+
+		return docIDs.Delete([]byte{0, 0, 0, 1})
+	})
+	if err != nil {
+		t.Fatalf("failed to remove document mapping: %v", err)
+	}
+
+	_, err = store.LoadIndex()
+	if err == nil {
+		t.Fatal("expected an error when a document mapping is missing")
 	}
 }

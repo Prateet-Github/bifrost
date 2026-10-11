@@ -1,0 +1,133 @@
+BIFROST — P3: COMPACT POSTING CODEC
+
+Hardware: Apple MacBook Air M2
+Architecture: Darwin arm64
+Benchmark: BenchmarkSaveIndex
+Iterations: 3
+Database: bbolt
+
+OBJECTIVE
+---------
+
+Replace Gob-based posting serialization with a compact binary codec
+using unsigned varints, delta-encoded document IDs, and delta-encoded
+token positions.
+
+Numeric document IDs are used in persisted posting lists to reduce
+storage overhead.
+
+
+BENCHMARK RESULTS
+-----------------
+
+1. 1,000 DOCUMENTS
+
+Before:
+  Time:        15.96 ms/op
+  Database:    1,048,576 bytes
+  Memory:      8,916,232 B/op
+  Allocations: 63,222 allocs/op
+
+After:
+  Time:        13.07 ms/op
+  Database:    524,288 bytes
+  Memory:      4,443,224 B/op
+  Allocations: 67,976 allocs/op
+
+
+2. 10,000 DOCUMENTS
+
+Before:
+  Time:        71.81 ms/op
+  Database:    8,388,608 bytes
+  Memory:      115,398,024 B/op
+  Allocations: 862,710 allocs/op
+
+After:
+  Time:        51.05 ms/op
+  Database:    4,194,304 bytes
+  Memory:      52,013,746 B/op
+  Allocations: 901,704 allocs/op
+
+
+3. 100,000 DOCUMENTS
+
+Before:
+  Time:        737.63 ms/op
+  Database:    69,468,160 bytes
+  Memory:      1,525,430,128 B/op
+  Allocations: 11,015,026 allocs/op
+
+After:
+  Time:        475.05 ms/op
+  Database:    39,993,344 bytes
+  Memory:      623,068,496 B/op
+  Allocations: 12,409,495 allocs/op
+
+
+IMPROVEMENTS AT 100,000 DOCUMENTS
+---------------------------------
+
+Database size:
+  Before: 69,468,160 bytes
+  After:  39,993,344 bytes
+  Reduction: 42.4%
+
+Index save time:
+  Before: 737.63 ms/op
+  After:  475.05 ms/op
+  Improvement: 35.6%
+
+Allocated memory:
+  Before: 1,525,430,128 B/op
+  After:  623,068,496 B/op
+  Reduction: 59.2%
+
+Allocation count:
+  Before: 11,015,026 allocs/op
+  After:  12,409,495 allocs/op
+  Increase: 12.7%
+
+
+IMPLEMENTATION
+--------------
+
+- Added internal/codec package.
+- Implemented compact posting-list encoding and decoding.
+- Used unsigned variable-length integer encoding.
+- Delta-encoded numeric document IDs and token positions.
+- Added the BCP1 format marker.
+- Introduced numeric document ID mappings.
+- Bumped storage schema version to 2.
+- Added round-trip, invalid-input, malformed-data, corruption,
+  and document-mapping tests.
+- Added fuzz testing for the decoder.
+
+
+VALIDATION
+----------
+
+go test ./...
+PASS
+
+go test -race ./internal/storage
+PASS
+
+go test ./internal/codec -fuzz=FuzzDecodePostings -fuzztime=10s
+PASS
+
+Fuzz executions: 824,050
+
+
+CONCLUSION
+----------
+
+The compact posting codec reduced the database size by approximately
+42.4% and index-save time by approximately 35.6% on the 100,000-document
+benchmark.
+
+Allocated bytes decreased by approximately 59.2%, although the number
+of allocations increased by approximately 12.7%.
+
+These are local benchmark results and may vary with hardware, Go version,
+and workload.
