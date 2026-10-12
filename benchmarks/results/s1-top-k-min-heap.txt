@@ -1,0 +1,115 @@
+Bifrost — S1: Top-K Min-Heap
+
+Optimization:
+Replace full result sorting with a size-K min-heap.
+
+Goal:
+Avoid sorting every scored candidate when only the top K results
+are requested.
+
+Environment:
+- CPU: Apple M2
+- OS: macOS
+- Architecture: arm64
+- Go benchmark package: internal/search
+- Benchmark: BenchmarkSearch
+- Benchmark flags: -benchmem -count=3
+- K: 10
+
+------------------------------------------------------------
+1. BASELINE: FULL SORT
+------------------------------------------------------------
+
+Previous benchmark results before S1.
+
+Corpus Size    Latency          Bytes/op       Allocs/op
+------------------------------------------------------------
+1,000          646,139 ns/op    671,226 B/op   4,040
+10,000       4,423,917 ns/op  6,481,370 B/op  40,099
+100,000     60,035,625 ns/op 62,996,570 B/op 400,550
+
+Note:
+These are historical baseline measurements. They were not collected
+in the same benchmark run as the S1 measurements.
+
+------------------------------------------------------------
+2. AFTER: TOP-K MIN-HEAP
+------------------------------------------------------------
+
+Command:
+go test -run='^$' -bench='BenchmarkSearch' -benchmem -count=3 ./internal/search
+
+Raw results:
+
+BenchmarkSearch/Docs1000-8
+    3205    314249 ns/op    649295 B/op    4139 allocs/op
+    3824    316489 ns/op    649280 B/op    4139 allocs/op
+    3717    316576 ns/op    649276 B/op    4139 allocs/op
+
+BenchmarkSearch/Docs10000-8
+     404   2970535 ns/op   6239347 B/op   40244 allocs/op
+     403   2988007 ns/op   6239299 B/op   40242 allocs/op
+     402   2981245 ns/op   6239308 B/op   40243 allocs/op
+
+BenchmarkSearch/Docs100000-8
+      28  39617412 ns/op  60601045 B/op  400737 allocs/op
+      28  39067150 ns/op  60601166 B/op  400742 allocs/op
+      33  39370419 ns/op  60601068 B/op  400738 allocs/op
+
+------------------------------------------------------------
+3. SUMMARY
+------------------------------------------------------------
+
+Corpus Size    Avg Latency    Approx. Improvement
+------------------------------------------------------------
+1,000          315.77 us      51.1% faster
+10,000         2.98 ms        32.6% faster
+100,000        39.69 ms       33.9% faster
+
+At 100,000 documents:
+- Latency decreased from approximately 60.04 ms to 39.69 ms.
+- Allocated bytes per operation decreased by approximately 3.8%.
+- Allocation count increased slightly.
+
+These comparisons are indicative because the baseline and S1
+measurements were collected separately.
+
+------------------------------------------------------------
+4. IMPLEMENTATION DETAILS
+------------------------------------------------------------
+
+- Added resultHeap using Go's container/heap package.
+- Maintains at most K results during ranking.
+- The heap root represents the worst currently selected result.
+- A better result replaces the root.
+- Final sorting is performed only on the retained results.
+- Preserves ranking order:
+    1. Higher score first.
+    2. Lexicographically smaller DocID first for equal scores.
+
+Scoring and candidate generation remain unchanged.
+
+------------------------------------------------------------
+5. VALIDATION
+------------------------------------------------------------
+
+- Existing search tests: passed.
+- Top-K ranking test: passed.
+- Deterministic tie-breaking test: passed.
+- Full test suite: passed.
+
+------------------------------------------------------------
+6. CONCLUSION
+------------------------------------------------------------
+
+S1 reduces ranking work from full sorting, O(N log N), to
+Top-K heap selection, O(N log K), followed by sorting K results.
+
+The 100,000-document synthetic benchmark showed approximately
+33.9% lower search latency.
+
+The heap optimization is retained.
+
+Benchmark results are workload-dependent and should be remeasured
+under controlled conditions before making definitive performance
+claims.

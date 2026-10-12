@@ -333,3 +333,72 @@ func BenchmarkSearch(b *testing.B) {
 		})
 	}
 }
+
+func TestSearchTopKRanking(t *testing.T) {
+	idx := index.NewInvertedIndex()
+
+	idx.AddDocument("D1", []tokenizer.Token{
+		{Text: "go", Position: 0},
+	})
+
+	idx.AddDocument("D2", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "go", Position: 1},
+	})
+
+	idx.AddDocument("D3", []tokenizer.Token{
+		{Text: "go", Position: 0},
+		{Text: "go", Position: 1},
+		{Text: "go", Position: 2},
+	})
+
+	idx.AddDocument("D4", []tokenizer.Token{
+		{Text: "go", Position: 0},
+	})
+
+	searcher := NewSearcher(idx)
+	results := searcher.Search("go", 2)
+
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+
+	if results[0].DocID != "D3" {
+		t.Errorf("expected D3 first, got %s", results[0].DocID)
+	}
+
+	if results[1].DocID != "D2" {
+		t.Errorf("expected D2 second, got %s", results[1].DocID)
+	}
+}
+
+func TestSearchTopKTieBreaking(t *testing.T) {
+	idx := index.NewInvertedIndex()
+
+	idx.AddDocument("D3", []tokenizer.Token{
+		{Text: "go", Position: 0},
+	})
+
+	idx.AddDocument("D1", []tokenizer.Token{
+		{Text: "go", Position: 0},
+	})
+
+	idx.AddDocument("D2", []tokenizer.Token{
+		{Text: "go", Position: 0},
+	})
+
+	searcher := NewSearcher(idx)
+	results := searcher.Search("go", 2)
+
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+
+	if results[0].DocID != "D1" || results[1].DocID != "D2" {
+		t.Errorf(
+			"expected [D1 D2], got [%s %s]",
+			results[0].DocID,
+			results[1].DocID,
+		)
+	}
+}

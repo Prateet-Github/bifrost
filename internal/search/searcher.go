@@ -1,6 +1,7 @@
 package search
 
 import (
+	"container/heap"
 	"sort"
 
 	"github.com/Prateet-Github/bifrost/internal/analysis/tokenizer"
@@ -92,10 +93,10 @@ func (s *Searcher) Search(rawQuery string, k int) []Result {
 		terms = append(terms, token.Text)
 	}
 
-	// Prepare collection statistics and IDF values once per query.
 	queryScorer := s.scorer.PrepareQuery(terms)
 
-	results := make([]Result, 0, len(candidates))
+	results := make(resultHeap, 0, min(k, len(candidates)))
+	heap.Init(&results)
 
 	for _, candidate := range candidates {
 		doc, exists := s.index.DocumentStats(candidate.DocID)
@@ -103,7 +104,6 @@ func (s *Searcher) Search(rawQuery string, k int) []Result {
 		var score float64
 
 		if exists {
-			// Reuse the postings already retrieved during candidate generation.
 			for _, match := range candidate.Matches {
 				score += queryScorer.ScoreTerm(
 					match.Term,
@@ -113,10 +113,25 @@ func (s *Searcher) Search(rawQuery string, k int) []Result {
 			}
 		}
 
-		results = append(results, Result{
+		result := Result{
 			DocID: candidate.DocID,
 			Score: score,
-		})
+		}
+
+		if results.Len() < k {
+			heap.Push(&results, result)
+			continue
+		}
+
+		worst := results[0]
+
+		better := result.Score > worst.Score ||
+			(result.Score == worst.Score && result.DocID < worst.DocID)
+
+		if better {
+			heap.Pop(&results)
+			heap.Push(&results, result)
+		}
 	}
 
 	sort.Slice(results, func(i, j int) bool {
@@ -127,11 +142,7 @@ func (s *Searcher) Search(rawQuery string, k int) []Result {
 		return results[i].Score > results[j].Score
 	})
 
-	if k > len(results) {
-		k = len(results)
-	}
-
-	return results[:k]
+	return results
 }
 
 func (s *Searcher) PhraseMatch(
@@ -152,4 +163,38 @@ func (s *Searcher) PhraseMatch(
 			tokens[1].Text,
 		},
 	)
+}
+
+type resultHeap []Result
+
+func (h resultHeap) Len() int {
+	return len(h)
+}
+
+func (h resultHeap) Less(i, j int) bool {
+	if h[i].Score == h[j].Score {
+		// for equal scores, the lexicographically larger DocID is worse
+		return h[i].DocID > h[j].DocID
+	}
+
+	// tge lower score is worse and belongs at the root
+	return h[i].Score < h[j].Score
+}
+
+func (h resultHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+}
+
+func (h *resultHeap) Push(value any) {
+	*h = append(*h, value.(Result))
+}
+
+func (h *resultHeap) Pop() any {
+	old := *h
+	n := len(old)
+	value := old[n-1]
+
+	*h = old[:n-1]
+
+	return value
 }
