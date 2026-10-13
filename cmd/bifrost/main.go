@@ -6,11 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Prateet-Github/bifrost/internal/analysis"
-	"github.com/Prateet-Github/bifrost/internal/index"
-	"github.com/Prateet-Github/bifrost/internal/ingestion"
-	"github.com/Prateet-Github/bifrost/internal/search"
-	"github.com/Prateet-Github/bifrost/internal/storage"
+	"github.com/Prateet-Github/bifrost/internal/engine"
 )
 
 const (
@@ -19,78 +15,26 @@ const (
 )
 
 func main() {
-	analyzer := analysis.NewAnalyzer()
-
-	store, err := storage.Open(dbPath)
-	if err != nil {
-		fmt.Printf("failed to open storage: %v\n", err)
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	defer store.Close()
+}
 
-	var idx *index.InvertedIndex
-
-	fingerprint, err := ingestion.ComputeDirFingerprint(documentsPath)
+func run() error {
+	bifrost, err := engine.Open(engine.Config{
+		DBPath:   dbPath,
+		DocsPath: documentsPath,
+	})
 	if err != nil {
-		fmt.Printf("failed to compute source fingerprint: %v\n", err)
-		os.Exit(1)
+		return err
 	}
+	defer bifrost.Close()
 
-	ready, err := store.IsIndexReady()
-	if err != nil {
-		fmt.Printf("failed to check index status: %v\n", err)
-		os.Exit(1)
-	}
-
-	loadExistingIndex := false
-
-	if ready {
-		storedFingerprint, err := store.LoadSourceFingerprint()
-		if err != nil {
-			fmt.Printf("failed to load source fingerprint: %v\n", err)
-			os.Exit(1)
-		}
-
-		if storedFingerprint == fingerprint {
-			loadExistingIndex = true
-		} else {
-			fmt.Println("Source documents changed. Rebuilding index...")
-		}
-	}
-
-	if loadExistingIndex {
-		fmt.Println("Loading index from disk...")
-
-		idx, err = store.LoadIndex()
-		if err != nil {
-			fmt.Printf("failed to load index: %v\n", err)
-			os.Exit(1)
-		}
-	} else {
-		fmt.Println("Building index...")
-
-		idx = index.NewInvertedIndex()
-
-		ingester := ingestion.NewIngester(analyzer, idx)
-
-		if err := ingester.IngestDirectory(documentsPath); err != nil {
-			fmt.Printf("failed to ingest documents: %v\n", err)
-			os.Exit(1)
-		}
-
-		if err := store.SaveIndex(idx, fingerprint); err != nil {
-			fmt.Printf("failed to save index: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Println("Index saved to disk.")
-	}
-	stats := idx.Stats()
+	stats := bifrost.Stats()
 
 	fmt.Printf("Indexed %d documents\n", stats.Documents)
 	fmt.Printf("Average document length: %.2f\n", stats.AverageDocLength)
-
-	searcher := search.NewSearcher(idx)
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -112,7 +56,7 @@ func main() {
 			break
 		}
 
-		results := searcher.Search(query, 10)
+		results := bifrost.Search(query, 10)
 
 		if len(results) == 0 {
 			fmt.Println("No results found.")
@@ -130,4 +74,6 @@ func main() {
 			)
 		}
 	}
+
+	return nil
 }
