@@ -269,35 +269,6 @@ func (s *Storage) LoadDocumentStats(
 	return stats, err
 }
 
-func (s *Storage) SaveStats(stats index.Stats) error {
-	data, err := encode(stats)
-	if err != nil {
-		return err
-	}
-
-	return s.db.Update(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(metadataBucket)
-		return bucket.Put([]byte("stats"), data)
-	})
-}
-
-func (s *Storage) LoadStats() (index.Stats, error) {
-	var stats index.Stats
-
-	err := s.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(metadataBucket)
-
-		data := bucket.Get([]byte("stats"))
-		if data == nil {
-			return nil
-		}
-
-		return decode(data, &stats)
-	})
-
-	return stats, err
-}
-
 func (s *Storage) SaveIndex(
 	idx *index.InvertedIndex,
 	fingerprint string,
@@ -305,7 +276,6 @@ func (s *Storage) SaveIndex(
 	termsData := idx.Terms()
 	titleTermsData := idx.TitleTerms()
 	documentsData := idx.Documents()
-	stats := idx.Stats()
 
 	documentIDs := make([]string, 0, len(documentsData))
 	for docID := range documentsData {
@@ -413,15 +383,6 @@ func (s *Storage) SaveIndex(
 			if err := docIDs.Put(key[:], []byte(docID)); err != nil {
 				return err
 			}
-		}
-
-		data, err := encode(stats)
-		if err != nil {
-			return err
-		}
-
-		if err := metadata.Put([]byte("stats"), data); err != nil {
-			return err
 		}
 
 		if err := metadata.Put(builtKey, []byte("true")); err != nil {
