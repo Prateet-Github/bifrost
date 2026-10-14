@@ -211,3 +211,74 @@ func (h *resultHeap) Pop() any {
 
 	return value
 }
+
+func (s *Searcher) SearchPhrase(rawPhrase string, k int) []Result {
+	tokens := deduplicateTokens(s.queryAnalyzer.Analyze(rawPhrase))
+
+	if len(tokens) == 0 || k <= 0 {
+		return nil
+	}
+
+	terms := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		terms = append(terms, token.Text)
+	}
+
+	candidates := s.candidates(tokens)
+
+	queryScorer := s.scorer.PrepareQuery(terms)
+
+	results := make(resultHeap, 0, min(k, len(candidates)))
+	heap.Init(&results)
+
+	for _, candidate := range candidates {
+		if !s.PhraseMatch(rawPhrase, candidate.DocID) {
+			continue
+		}
+
+		doc, exists := s.index.DocumentStats(candidate.DocID)
+		if !exists {
+			continue
+		}
+
+		var score float64
+
+		for _, match := range candidate.Matches {
+			score += queryScorer.ScoreTerm(
+				match.Term,
+				match.Posting.TermFreq,
+				doc.Length,
+			)
+		}
+
+		result := Result{
+			DocID: candidate.DocID,
+			Score: score,
+		}
+
+		if results.Len() < k {
+			heap.Push(&results, result)
+			continue
+		}
+
+		worst := results[0]
+
+		better := result.Score > worst.Score ||
+			(result.Score == worst.Score && result.DocID < worst.DocID)
+
+		if better {
+			heap.Pop(&results)
+			heap.Push(&results, result)
+		}
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Score == results[j].Score {
+			return results[i].DocID < results[j].DocID
+		}
+
+		return results[i].Score > results[j].Score
+	})
+
+	return results
+}

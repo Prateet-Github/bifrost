@@ -99,6 +99,10 @@ func (e *Engine) Search(query string, k int) []search.Result {
 	return e.searcher.Search(query, k)
 }
 
+func (e *Engine) SearchPhrase(phrase string, k int) []search.Result {
+	return e.searcher.SearchPhrase(phrase, k)
+}
+
 func (e *Engine) Stats() index.Stats {
 	return e.stats
 }

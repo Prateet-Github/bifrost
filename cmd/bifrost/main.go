@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Prateet-Github/bifrost/internal/engine"
+	"github.com/Prateet-Github/bifrost/internal/search"
 )
 
 const (
@@ -56,7 +57,14 @@ func run() error {
 			break
 		}
 
-		results := bifrost.Search(query, 10)
+		var results []search.Result
+
+		if strings.HasPrefix(query, `"`) && strings.HasSuffix(query, `"`) && len(query) >= 2 {
+			phrase := query[1 : len(query)-1]
+			results = bifrost.SearchPhrase(phrase, 10)
+		} else {
+			results = bifrost.Search(query, 10)
+		}
 
 		if len(results) == 0 {
 			fmt.Println("No results found.")
