@@ -163,24 +163,19 @@ func (s *Searcher) Search(rawQuery string, k int) []Result {
 	return results
 }
 
-func (s *Searcher) PhraseMatch(
-	rawPhrase string,
-	docID string,
-) bool {
+func (s *Searcher) PhraseMatch(rawPhrase string, docID string) bool {
 	tokens := s.queryAnalyzer.Analyze(rawPhrase)
 
-	if len(tokens) != 2 {
+	if len(tokens) == 0 {
 		return false
 	}
 
-	return phraseMatch(
-		s.index,
-		docID,
-		[]string{
-			tokens[0].Text,
-			tokens[1].Text,
-		},
-	)
+	terms := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		terms = append(terms, token.Text)
+	}
+
+	return phraseMatch(s.index, docID, terms)
 }
 
 type resultHeap []Result

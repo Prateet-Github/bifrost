@@ -111,3 +111,98 @@ func TestPhraseMatch_DoesNotCollapseStopWordPositions(t *testing.T) {
 		t.Fatal(`"cat hat" should not match "cat in the hat"`)
 	}
 }
+
+func TestPhraseMatch_Generalized(t *testing.T) {
+
+	analyzer := analysis.NewAnalyzer()
+	idx := index.NewInvertedIndex()
+	tokens := analyzer.Analyze(
+		"distributed systems are fascinating because distributed systems",
+	)
+	idx.AddDocument("D1", tokens)
+	searcher := NewSearcher(idx)
+
+	tests := []struct {
+		name   string
+		phrase string
+		docID  string
+		want   bool
+	}{
+		{
+			name:   "single term",
+			phrase: "distributed",
+			docID:  "D1",
+			want:   true,
+		},
+		{
+			name:   "two consecutive terms",
+			phrase: "distributed systems",
+			docID:  "D1",
+			want:   true,
+		},
+		{
+			name:   "three consecutive terms",
+			phrase: "distributed systems distributed",
+			docID:  "D1",
+			want:   false,
+		},
+		{
+			name:   "longer consecutive phrase",
+			phrase: "distributed systems are fascinating",
+			docID:  "D1",
+			want:   false,
+		},
+		{
+			name:   "terms in wrong order",
+			phrase: "systems distributed",
+			docID:  "D1",
+			want:   false,
+		},
+		{
+			name:   "terms are not consecutive",
+			phrase: "distributed fascinating",
+			docID:  "D1",
+			want:   false,
+		},
+		{
+			name:   "repeated term phrase",
+			phrase: "systems systems",
+			docID:  "D1",
+			want:   false,
+		},
+		{
+			name:   "missing term",
+			phrase: "distributed databases",
+			docID:  "D1",
+			want:   false,
+		},
+		{
+			name:   "missing document",
+			phrase: "distributed systems",
+			docID:  "D2",
+			want:   false,
+		},
+		{
+			name:   "empty phrase",
+			phrase: "",
+			docID:  "D1",
+			want:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := searcher.PhraseMatch(tt.phrase, tt.docID)
+
+			if got != tt.want {
+				t.Errorf(
+					"PhraseMatch(%q, %q) = %v, want %v",
+					tt.phrase,
+					tt.docID,
+					got,
+					tt.want,
+				)
+			}
+		})
+	}
+}

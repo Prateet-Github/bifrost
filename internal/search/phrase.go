@@ -11,28 +11,48 @@ func phraseMatch(
 		return false
 	}
 
-	if len(terms) == 1 {
-		return len(
-			positionsForTerm(idx, terms[0], docID),
-		) > 0
-	}
-
-	firstPositions := positionsForTerm(
+	currentPositions := positionsForTerm(
 		idx,
 		terms[0],
 		docID,
 	)
 
-	secondPositions := positionsForTerm(
-		idx,
-		terms[1],
-		docID,
-	)
+	if len(currentPositions) == 0 {
+		return false
+	}
 
-	return positionsMatch(
-		firstPositions,
-		secondPositions,
-	)
+	for _, term := range terms[1:] {
+		nextPositions := positionsForTerm(
+			idx,
+			term,
+			docID,
+		)
+
+		if len(nextPositions) == 0 {
+			return false
+		}
+
+		matchedPositions := make([]int, 0)
+
+		for _, currentPos := range currentPositions {
+			for _, nextPos := range nextPositions {
+				if nextPos == currentPos+1 {
+					matchedPositions = append(
+						matchedPositions,
+						nextPos,
+					)
+				}
+			}
+		}
+
+		if len(matchedPositions) == 0 {
+			return false
+		}
+
+		currentPositions = matchedPositions
+	}
+
+	return true
 }
 
 func positionsForTerm(
