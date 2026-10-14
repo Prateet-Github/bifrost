@@ -1,0 +1,17 @@
+Bifrost v0.2.0 — Search Benchmark
+
+Environment:
+- CPU: Apple M2
+- OS: macOS
+- Architecture: darwin/arm64
+- Runs per configuration: 5
+
+Command:
+go test ./internal/search -run '^$' -bench '^BenchmarkSearch$' -benchmem -count=5
+
+Results:
+- 1,000 documents: 333.05 µs/op, 713,684 B/op, 4,143 allocs/op
+- 10,000 documents: 3.206 ms/op, 6,879,744 B/op, 40,247 allocs/op
+- 100,000 documents: 42.18 ms/op, 67,001,498 B/op, 400,742 allocs/op
+
+Status: PASS

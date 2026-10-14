@@ -1,0 +1,17 @@
+Bifrost v0.2.0 — Storage Benchmark
+
+Environment:
+- CPU: Apple M2
+- OS: macOS
+- Architecture: darwin/arm64
+- Runs per configuration: 5
+
+Command:
+go test ./internal/storage -run '^$' -bench '^BenchmarkSaveIndex$' -benchmem -count=5
+
+Results:
+- 1,000 documents: 14.41 ms/op, 512 KiB database
+- 10,000 documents: 52.57 ms/op, 4 MiB database
+- 100,000 documents: 512.89 ms/op, 39.74 MiB database
+
+Status: PASS
