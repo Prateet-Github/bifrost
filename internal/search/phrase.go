@@ -2,10 +2,11 @@ package search
 
 import "github.com/Prateet-Github/bifrost/internal/index"
 
-func phraseMatch(
+func phraseMatchField(
 	idx *index.InvertedIndex,
 	docID string,
 	terms []string,
+	isTitle bool,
 ) bool {
 	if len(terms) == 0 {
 		return false
@@ -15,6 +16,7 @@ func phraseMatch(
 		idx,
 		terms[0],
 		docID,
+		isTitle,
 	)
 
 	if len(currentPositions) == 0 {
@@ -26,6 +28,7 @@ func phraseMatch(
 			idx,
 			term,
 			docID,
+			isTitle,
 		)
 
 		if len(nextPositions) == 0 {
@@ -59,8 +62,15 @@ func positionsForTerm(
 	idx *index.InvertedIndex,
 	term string,
 	docID string,
+	isTitle bool,
 ) []int {
-	postings := idx.Lookup(term)
+	var postings []index.Posting
+
+	if isTitle {
+		postings = idx.LookupTitle(term)
+	} else {
+		postings = idx.Lookup(term)
+	}
 
 	for _, posting := range postings {
 		if posting.DocID == docID {

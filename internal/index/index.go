@@ -9,19 +9,22 @@ type Posting struct {
 }
 
 type DocumentStats struct {
-	Length int
+	Length      int
+	TitleLength int
 }
 
 type InvertedIndex struct {
 	terms               map[string][]Posting
+	titleTerms          map[string][]Posting
 	documents           map[string]DocumentStats
 	totalDocumentLength int
 }
 
 func NewInvertedIndex() *InvertedIndex {
 	return &InvertedIndex{
-		terms:     make(map[string][]Posting),
-		documents: make(map[string]DocumentStats),
+		terms:      make(map[string][]Posting),
+		titleTerms: make(map[string][]Posting),
+		documents:  make(map[string]DocumentStats),
 	}
 }
 
@@ -29,36 +32,76 @@ func (idx *InvertedIndex) AddDocument(
 	docID string,
 	tokens []tokenizer.Token,
 ) {
+	idx.AddDocumentFields(docID, nil, tokens)
+}
+
+func (idx *InvertedIndex) AddDocumentFields(
+	docID string,
+	titleTokens []tokenizer.Token,
+	bodyTokens []tokenizer.Token,
+) {
 	idx.Remove(docID)
 
-	docLength := len(tokens)
-
 	idx.documents[docID] = DocumentStats{
-		Length: docLength,
+		Length:      len(bodyTokens),
+		TitleLength: len(titleTokens),
 	}
 
-	idx.totalDocumentLength += docLength
+	idx.totalDocumentLength += len(bodyTokens)
 
-	for _, token := range tokens {
-		postings := idx.terms[token.Text]
+	addTokens := func(
+		terms map[string][]Posting,
+		tokens []tokenizer.Token,
+	) {
+		for _, token := range tokens {
+			postings := terms[token.Text]
 
-		if len(postings) == 0 || postings[len(postings)-1].DocID != docID {
-			idx.terms[token.Text] = append(postings, Posting{
-				DocID:     docID,
-				TermFreq:  1,
-				Positions: []int{token.Position},
-			})
-			continue
+			if len(postings) == 0 ||
+				postings[len(postings)-1].DocID != docID {
+				terms[token.Text] = append(postings, Posting{
+					DocID:     docID,
+					TermFreq:  1,
+					Positions: []int{token.Position},
+				})
+				continue
+			}
+
+			posting := &postings[len(postings)-1]
+			posting.TermFreq++
+			posting.Positions = append(posting.Positions, token.Position)
 		}
-
-		posting := &postings[len(postings)-1]
-		posting.TermFreq++
-		posting.Positions = append(posting.Positions, token.Position)
 	}
+
+	addTokens(idx.titleTerms, titleTokens)
+	addTokens(idx.terms, bodyTokens)
 }
 
 func (idx *InvertedIndex) Lookup(term string) []Posting {
 	return idx.terms[term]
+}
+
+func (idx *InvertedIndex) LookupTitle(term string) []Posting {
+	return idx.titleTerms[term]
+}
+
+func (idx *InvertedIndex) TitleTerms() map[string][]Posting {
+	terms := make(map[string][]Posting, len(idx.titleTerms))
+
+	for term, postings := range idx.titleTerms {
+		copied := make([]Posting, len(postings))
+
+		for i, posting := range postings {
+			copied[i] = Posting{
+				DocID:     posting.DocID,
+				TermFreq:  posting.TermFreq,
+				Positions: append([]int(nil), posting.Positions...),
+			}
+		}
+
+		terms[term] = copied
+	}
+
+	return terms
 }
 
 func (idx *InvertedIndex) DocumentStats(docID string) (DocumentStats, bool) {
@@ -70,7 +113,17 @@ func (idx *InvertedIndex) Terms() map[string][]Posting {
 	terms := make(map[string][]Posting, len(idx.terms))
 
 	for term, postings := range idx.terms {
-		terms[term] = append([]Posting(nil), postings...)
+		copied := make([]Posting, len(postings))
+
+		for i, posting := range postings {
+			copied[i] = Posting{
+				DocID:     posting.DocID,
+				TermFreq:  posting.TermFreq,
+				Positions: append([]int(nil), posting.Positions...),
+			}
+		}
+
+		terms[term] = copied
 	}
 
 	return terms
@@ -88,6 +141,16 @@ func (idx *InvertedIndex) Documents() map[string]DocumentStats {
 
 func (idx *InvertedIndex) AddPosting(term string, posting Posting) {
 	idx.terms[term] = append(idx.terms[term], posting)
+}
+
+func (idx *InvertedIndex) AddTitlePosting(
+	term string,
+	posting Posting,
+) {
+	idx.titleTerms[term] = append(
+		idx.titleTerms[term],
+		posting,
+	)
 }
 
 func (idx *InvertedIndex) SetDocumentStats(
@@ -110,22 +173,27 @@ func (idx *InvertedIndex) Remove(docID string) {
 
 	idx.totalDocumentLength -= doc.Length
 
-	for term, postings := range idx.terms {
-		remaining := postings[:0]
+	removePostings := func(terms map[string][]Posting) {
+		for term, postings := range terms {
+			remaining := postings[:0]
 
-		for _, posting := range postings {
-			if posting.DocID != docID {
-				remaining = append(remaining, posting)
+			for _, posting := range postings {
+				if posting.DocID != docID {
+					remaining = append(remaining, posting)
+				}
 			}
-		}
 
-		if len(remaining) == 0 {
-			delete(idx.terms, term)
-			continue
-		}
+			if len(remaining) == 0 {
+				delete(terms, term)
+				continue
+			}
 
-		idx.terms[term] = remaining
+			terms[term] = remaining
+		}
 	}
+
+	removePostings(idx.terms)
+	removePostings(idx.titleTerms)
 
 	delete(idx.documents, docID)
 }

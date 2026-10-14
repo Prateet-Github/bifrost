@@ -178,3 +178,57 @@ func TestBM25PreparedQueryScoresDocumentTerms(t *testing.T) {
 		)
 	}
 }
+
+func TestBM25TitleIDF(t *testing.T) {
+	idx := index.NewInvertedIndex()
+
+	idx.AddDocumentFields(
+		"D1",
+		[]tokenizer.Token{{Text: "common", Position: 0}},
+		[]tokenizer.Token{{Text: "body", Position: 0}},
+	)
+	idx.AddDocumentFields(
+		"D2",
+		[]tokenizer.Token{{Text: "common", Position: 0}},
+		[]tokenizer.Token{{Text: "body", Position: 0}},
+	)
+	idx.AddDocumentFields(
+		"D3",
+		[]tokenizer.Token{{Text: "rare", Position: 0}},
+		[]tokenizer.Token{{Text: "body", Position: 0}},
+	)
+
+	bm25 := NewBM25(idx)
+
+	commonIDF := bm25.TitleIDF("common")
+	rareIDF := bm25.TitleIDF("rare")
+
+	if rareIDF <= commonIDF {
+		t.Errorf(
+			"expected rarer title term to have higher IDF: common=%f rare=%f",
+			commonIDF,
+			rareIDF,
+		)
+	}
+}
+
+func TestBM25CombineFieldScores(t *testing.T) {
+	bm25 := NewBM25(index.NewInvertedIndex())
+
+	score := bm25.CombineFieldScores(0.5, 0.8)
+
+	expected := 0.5 + 2.0*0.8
+
+	if math.Abs(score-expected) > 1e-9 {
+		t.Errorf("expected %f, got %f", expected, score)
+	}
+
+	bm25.TitleBoost = 3.0
+
+	score = bm25.CombineFieldScores(0.5, 0.8)
+	expected = 0.5 + 3.0*0.8
+
+	if math.Abs(score-expected) > 1e-9 {
+		t.Errorf("expected %f with updated boost, got %f", expected, score)
+	}
+}

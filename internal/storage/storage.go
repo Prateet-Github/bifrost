@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	termsBucket     = []byte("terms")
-	documentsBucket = []byte("documents")
-	docIDsBucket    = []byte("doc_ids")
-	metadataBucket  = []byte("metadata")
+	termsBucket      = []byte("terms")
+	titleTermsBucket = []byte("title_terms")
+	documentsBucket  = []byte("documents")
+	docIDsBucket     = []byte("doc_ids")
+	metadataBucket   = []byte("metadata")
 )
 
 var (
@@ -27,7 +28,7 @@ var (
 
 var compactPostingMagic = []byte("BCP1")
 
-const currentSchemaVersion = "2"
+const currentSchemaVersion = "3"
 
 type Storage struct {
 	db *bbolt.DB
@@ -41,6 +42,10 @@ func Open(path string) (*Storage, error) {
 
 	err = db.Update(func(tx *bbolt.Tx) error {
 		if _, err := tx.CreateBucketIfNotExists(termsBucket); err != nil {
+			return err
+		}
+
+		if _, err := tx.CreateBucketIfNotExists(titleTermsBucket); err != nil {
 			return err
 		}
 
@@ -71,11 +76,7 @@ func (s *Storage) Close() error {
 	return s.db.Close()
 }
 
-// LoadPostings supports both compact postings written by SaveIndex
-// and Gob-encoded postings written by SavePostings.
-func (s *Storage) LoadPostings(
-	term string,
-) ([]index.Posting, error) {
+func (s *Storage) LoadPostings(term string) ([]index.Posting, error) {
 	var postings []index.Posting
 
 	err := s.db.View(func(tx *bbolt.Tx) error {
@@ -86,7 +87,6 @@ func (s *Storage) LoadPostings(
 			return nil
 		}
 
-		// Compact posting format.
 		if bytes.HasPrefix(data, compactPostingMagic) {
 			docIDs := tx.Bucket(docIDsBucket)
 			if docIDs == nil {
@@ -135,13 +135,83 @@ func (s *Storage) LoadPostings(
 			return nil
 		}
 
-		// Legacy Gob format used by SavePostings.
 		if err := decode(data, &postings); err != nil {
 			return fmt.Errorf(
 				"decode postings for term %q: %w",
 				term,
 				err,
 			)
+		}
+
+		return nil
+	})
+
+	return postings, err
+}
+
+func (s *Storage) LoadTitlePostings(term string) ([]index.Posting, error) {
+	var postings []index.Posting
+
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		titleTerms := tx.Bucket(titleTermsBucket)
+		if titleTerms == nil {
+			return fmt.Errorf("title terms bucket not found")
+		}
+
+		data := titleTerms.Get([]byte(term))
+		if data == nil {
+			return nil
+		}
+
+		if !bytes.HasPrefix(data, compactPostingMagic) {
+			return fmt.Errorf(
+				"title term %q does not use the compact posting format",
+				term,
+			)
+		}
+
+		docIDs := tx.Bucket(docIDsBucket)
+		if docIDs == nil {
+			return fmt.Errorf("document ID bucket not found")
+		}
+
+		numericToDocument, err := loadDocumentIDMap(docIDs)
+		if err != nil {
+			return err
+		}
+
+		decoded, err := codec.DecodePostings(
+			data[len(compactPostingMagic):],
+		)
+		if err != nil {
+			return fmt.Errorf(
+				"decode title postings for term %q: %w",
+				term,
+				err,
+			)
+		}
+
+		postings = make([]index.Posting, 0, len(decoded))
+
+		for _, posting := range decoded {
+			docID, exists := numericToDocument[posting.DocID]
+			if !exists {
+				return fmt.Errorf(
+					"numeric document ID %d missing from mapping",
+					posting.DocID,
+				)
+			}
+
+			positions := make([]int, len(posting.Positions))
+			for i, position := range posting.Positions {
+				positions[i] = int(position)
+			}
+
+			postings = append(postings, index.Posting{
+				DocID:     docID,
+				TermFreq:  int(posting.TermFreq),
+				Positions: positions,
+			})
 		}
 
 		return nil
@@ -233,10 +303,10 @@ func (s *Storage) SaveIndex(
 	fingerprint string,
 ) error {
 	termsData := idx.Terms()
+	titleTermsData := idx.TitleTerms()
 	documentsData := idx.Documents()
 	stats := idx.Stats()
 
-	// Assign deterministic numeric IDs to all documents.
 	documentIDs := make([]string, 0, len(documentsData))
 	for docID := range documentsData {
 		documentIDs = append(documentIDs, docID)
@@ -249,7 +319,6 @@ func (s *Storage) SaveIndex(
 	}
 
 	return s.db.Update(func(tx *bbolt.Tx) error {
-		// Replace the terms bucket.
 		if err := tx.DeleteBucket(termsBucket); err != nil &&
 			err != bbolt.ErrBucketNotFound {
 			return err
@@ -259,7 +328,15 @@ func (s *Storage) SaveIndex(
 			return err
 		}
 
-		// Replace the documents bucket.
+		if err := tx.DeleteBucket(titleTermsBucket); err != nil &&
+			err != bbolt.ErrBucketNotFound {
+			return err
+		}
+
+		if _, err := tx.CreateBucket(titleTermsBucket); err != nil {
+			return err
+		}
+
 		if err := tx.DeleteBucket(documentsBucket); err != nil &&
 			err != bbolt.ErrBucketNotFound {
 			return err
@@ -269,7 +346,6 @@ func (s *Storage) SaveIndex(
 			return err
 		}
 
-		// Replace the numeric-to-string ID mapping.
 		if err := tx.DeleteBucket(docIDsBucket); err != nil &&
 			err != bbolt.ErrBucketNotFound {
 			return err
@@ -280,54 +356,36 @@ func (s *Storage) SaveIndex(
 		}
 
 		terms := tx.Bucket(termsBucket)
+		titleTerms := tx.Bucket(titleTermsBucket)
 		documents := tx.Bucket(documentsBucket)
 		docIDs := tx.Bucket(docIDsBucket)
 		metadata := tx.Bucket(metadataBucket)
 
 		terms.FillPercent = 1.0
+		titleTerms.FillPercent = 1.0
 		documents.FillPercent = 1.0
 
-		// Save terms using the compact posting codec.
-		termKeys := make([]string, 0, len(termsData))
-		for term := range termsData {
-			termKeys = append(termKeys, term)
+		// save body terms
+		if err := saveTerms(
+			terms,
+			termsData,
+			documentToNumeric,
+		); err != nil {
+			return err
 		}
 
-		sort.Strings(termKeys)
-
-		for _, term := range termKeys {
-			postings := termsData[term]
-
-			compactPostings, err := toCodecPostings(
-				postings,
-				documentToNumeric,
-			)
-			if err != nil {
-				return err
-			}
-
-			data, err := codec.EncodePostings(compactPostings)
-			if err != nil {
-				return err
-			}
-
-			// Mark the stored value so the loading path can
-			// distinguish compact data from Gob-encoded data.
-			data = append(
-				append([]byte(nil), compactPostingMagic...),
-				data...,
-			)
-
-			if err := terms.Put([]byte(term), data); err != nil {
-				return err
-			}
+		// save title terms
+		if err := saveTerms(
+			titleTerms,
+			titleTermsData,
+			documentToNumeric,
+		); err != nil {
+			return err
 		}
 
-		// Save document statistics in sorted order.
+		// save doc stats
 		for _, docID := range documentIDs {
-			documentStats := documentsData[docID]
-
-			data, err := encode(documentStats)
+			data, err := encode(documentsData[docID])
 			if err != nil {
 				return err
 			}
@@ -337,7 +395,6 @@ func (s *Storage) SaveIndex(
 			}
 		}
 
-		// Save numeric ID -> original string ID.
 		numericIDs := make([]uint32, 0, len(numericToDocument))
 		for numericID := range numericToDocument {
 			numericIDs = append(numericIDs, numericID)
@@ -358,7 +415,6 @@ func (s *Storage) SaveIndex(
 			}
 		}
 
-		// Save collection statistics.
 		data, err := encode(stats)
 		if err != nil {
 			return err
@@ -368,7 +424,6 @@ func (s *Storage) SaveIndex(
 			return err
 		}
 
-		// Save index metadata.
 		if err := metadata.Put(builtKey, []byte("true")); err != nil {
 			return err
 		}
@@ -391,10 +446,50 @@ func (s *Storage) SaveIndex(
 	})
 }
 
+// saveTerms writes one field's postings using the compact posting codec
+func saveTerms(
+	bucket *bbolt.Bucket,
+	termsData map[string][]index.Posting,
+	documentToNumeric map[string]uint32,
+) error {
+	termKeys := make([]string, 0, len(termsData))
+	for term := range termsData {
+		termKeys = append(termKeys, term)
+	}
+
+	sort.Strings(termKeys)
+
+	for _, term := range termKeys {
+		compactPostings, err := toCodecPostings(
+			termsData[term],
+			documentToNumeric,
+		)
+		if err != nil {
+			return err
+		}
+
+		data, err := codec.EncodePostings(compactPostings)
+		if err != nil {
+			return err
+		}
+
+		data = append(
+			append([]byte(nil), compactPostingMagic...),
+			data...,
+		)
+
+		if err := bucket.Put([]byte(term), data); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (s *Storage) LoadIndex() (*index.InvertedIndex, error) {
 	idx := index.NewInvertedIndex()
 
-	// Load the numeric-to-string document ID mapping first.
+	// load the numeric-to-string document ID mapping first
 	var numericToDocument map[uint32]string
 
 	err := s.db.View(func(tx *bbolt.Tx) error {
@@ -411,8 +506,8 @@ func (s *Storage) LoadIndex() (*index.InvertedIndex, error) {
 		return nil, err
 	}
 
-	// Decode compact postings and restore original string IDs.
-	terms, err := s.loadAllTerms(numericToDocument)
+	// Restore body postings
+	terms, err := s.loadAllTerms(termsBucket, numericToDocument)
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +518,17 @@ func (s *Storage) LoadIndex() (*index.InvertedIndex, error) {
 		}
 	}
 
-	// Restore document statistics.
+	titleTerms, err := s.loadAllTerms(titleTermsBucket, numericToDocument)
+	if err != nil {
+		return nil, err
+	}
+
+	for term, postings := range titleTerms {
+		for _, posting := range postings {
+			idx.AddTitlePosting(term, posting)
+		}
+	}
+
 	documents, err := s.loadAllDocuments()
 	if err != nil {
 		return nil, err
@@ -437,15 +542,21 @@ func (s *Storage) LoadIndex() (*index.InvertedIndex, error) {
 }
 
 func (s *Storage) loadAllTerms(
+	bucketName []byte,
 	numericToDocument map[uint32]string,
 ) (map[string][]index.Posting, error) {
 	terms := make(map[string][]index.Posting)
 
 	err := s.db.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(termsBucket)
+		bucket := tx.Bucket(bucketName)
+		if bucket == nil {
+			return fmt.Errorf(
+				"terms bucket %q not found",
+				string(bucketName),
+			)
+		}
 
 		return bucket.ForEach(func(key, value []byte) error {
-			// Full indexes must contain compact postings.
 			if !bytes.HasPrefix(value, compactPostingMagic) {
 				return fmt.Errorf(
 					"term %q does not use the compact posting format",
@@ -503,12 +614,19 @@ func (s *Storage) loadAllDocuments() (
 
 	err := s.db.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(documentsBucket)
+		if bucket == nil {
+			return fmt.Errorf("documents bucket not found")
+		}
 
 		return bucket.ForEach(func(key, value []byte) error {
 			var stats index.DocumentStats
 
 			if err := decode(value, &stats); err != nil {
-				return err
+				return fmt.Errorf(
+					"decode document stats for %q: %w",
+					string(key),
+					err,
+				)
 			}
 
 			documents[string(key)] = stats
@@ -568,6 +686,9 @@ func (s *Storage) IsIndexReady() (bool, error) {
 
 	err := s.db.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(metadataBucket)
+		if bucket == nil {
+			return fmt.Errorf("metadata bucket not found")
+		}
 
 		built := bucket.Get(builtKey)
 		version := bucket.Get(schemaVersionKey)
@@ -599,6 +720,9 @@ func (s *Storage) LoadSourceFingerprint() (string, error) {
 
 	err := s.db.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(metadataBucket)
+		if bucket == nil {
+			return fmt.Errorf("metadata bucket not found")
+		}
 
 		value := bucket.Get(sourceFingerprintKey)
 		if value == nil {

@@ -654,3 +654,93 @@ func TestLoadIndexRejectsMissingDocumentMapping(t *testing.T) {
 		t.Fatal("expected an error when a document mapping is missing")
 	}
 }
+
+func TestSaveAndLoadIndexPreservesTitlePostings(t *testing.T) {
+	store, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("failed to open storage: %v", err)
+	}
+	defer store.Close()
+
+	idx := index.NewInvertedIndex()
+
+	titleTokens := []tokenizer.Token{
+		{Text: "search", Position: 0},
+		{Text: "engine", Position: 1},
+		{Text: "search", Position: 2},
+	}
+
+	bodyTokens := []tokenizer.Token{
+		{Text: "distributed", Position: 0},
+		{Text: "systems", Position: 1},
+	}
+
+	idx.AddDocumentFields(
+		"alpha.txt",
+		titleTokens,
+		bodyTokens,
+	)
+
+	if err := store.SaveIndex(idx, "test-fingerprint"); err != nil {
+		t.Fatalf("failed to save index: %v", err)
+	}
+
+	loaded, err := store.LoadIndex()
+	if err != nil {
+		t.Fatalf("failed to load index: %v", err)
+	}
+
+	// Verify title postings, including frequencies and positions.
+	for _, term := range []string{"search", "engine"} {
+		expected := idx.LookupTitle(term)
+		actual := loaded.LookupTitle(term)
+
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf(
+				"title postings for %q differ after reload:\ngot:  %+v\nwant: %+v",
+				term,
+				actual,
+				expected,
+			)
+		}
+	}
+
+	// Verify that body postings are still preserved.
+	for _, term := range []string{"distributed", "systems"} {
+		expected := idx.Lookup(term)
+		actual := loaded.Lookup(term)
+
+		if !reflect.DeepEqual(actual, expected) {
+			t.Errorf(
+				"body postings for %q differ after reload:\ngot:  %+v\nwant: %+v",
+				term,
+				actual,
+				expected,
+			)
+		}
+	}
+
+	// Verify body and title document lengths.
+	expectedStats, expectedOK := idx.DocumentStats("alpha.txt")
+	actualStats, actualOK := loaded.DocumentStats("alpha.txt")
+
+	if !expectedOK || !actualOK {
+		t.Fatal("document statistics missing before or after reload")
+	}
+
+	if actualStats != expectedStats {
+		t.Errorf(
+			"document stats differ after reload: got %+v, want %+v",
+			actualStats,
+			expectedStats,
+		)
+	}
+
+	if actualStats.TitleLength != len(titleTokens) {
+		t.Errorf(
+			"title length = %d, want %d",
+			actualStats.TitleLength,
+			len(titleTokens),
+		)
+	}
+}

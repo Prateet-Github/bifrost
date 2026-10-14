@@ -13,6 +13,7 @@ import (
 type Match struct {
 	Term    string
 	Posting index.Posting
+	IsTitle bool
 }
 
 type Candidate struct {
@@ -39,7 +40,7 @@ func NewSearcher(idx *index.InvertedIndex) *Searcher {
 	}
 }
 
-// deduplicate query terms
+// deduplicateTokens removes duplicate query terms
 func deduplicateTokens(tokens []tokenizer.Token) []tokenizer.Token {
 	seen := make(map[string]struct{}, len(tokens))
 	unique := make([]tokenizer.Token, 0, len(tokens))
@@ -66,22 +67,39 @@ func (s *Searcher) candidates(tokens []tokenizer.Token) []Candidate {
 	candidates := make(map[string]*Candidate)
 
 	for _, token := range tokens {
-		postings := s.index.Lookup(token.Text)
-
-		for _, posting := range postings {
+		// body matches
+		for _, posting := range s.index.Lookup(token.Text) {
 			candidate, exists := candidates[posting.DocID]
 
 			if !exists {
 				candidate = &Candidate{
 					DocID: posting.DocID,
 				}
-
 				candidates[posting.DocID] = candidate
 			}
 
 			candidate.Matches = append(candidate.Matches, Match{
 				Term:    token.Text,
 				Posting: posting,
+				IsTitle: false,
+			})
+		}
+
+		// title matches
+		for _, posting := range s.index.LookupTitle(token.Text) {
+			candidate, exists := candidates[posting.DocID]
+
+			if !exists {
+				candidate = &Candidate{
+					DocID: posting.DocID,
+				}
+				candidates[posting.DocID] = candidate
+			}
+
+			candidate.Matches = append(candidate.Matches, Match{
+				Term:    token.Text,
+				Posting: posting,
+				IsTitle: true,
 			})
 		}
 	}
@@ -96,7 +114,6 @@ func (s *Searcher) candidates(tokens []tokenizer.Token) []Candidate {
 }
 
 func (s *Searcher) Search(rawQuery string, k int) []Result {
-	// tokens := s.queryAnalyzer.Analyze(rawQuery)
 	tokens := deduplicateTokens(s.queryAnalyzer.Analyze(rawQuery))
 
 	if len(tokens) == 0 || k <= 0 {
@@ -106,30 +123,43 @@ func (s *Searcher) Search(rawQuery string, k int) []Result {
 	candidates := s.candidates(tokens)
 
 	terms := make([]string, 0, len(tokens))
-
 	for _, token := range tokens {
 		terms = append(terms, token.Text)
 	}
 
 	queryScorer := s.scorer.PrepareQuery(terms)
+	titleQueryScorer := s.scorer.PrepareTitleQuery(terms)
 
 	results := make(resultHeap, 0, min(k, len(candidates)))
 	heap.Init(&results)
 
 	for _, candidate := range candidates {
 		doc, exists := s.index.DocumentStats(candidate.DocID)
+		if !exists {
+			continue
+		}
 
-		var score float64
+		var bodyScore float64
+		var titleScore float64
 
-		if exists {
-			for _, match := range candidate.Matches {
-				score += queryScorer.ScoreTerm(
+		for _, match := range candidate.Matches {
+			if match.IsTitle {
+				titleScore += titleQueryScorer.ScoreTerm(
 					match.Term,
 					match.Posting.TermFreq,
-					doc.Length,
+					doc.TitleLength,
 				)
+				continue
 			}
+
+			bodyScore += queryScorer.ScoreTerm(
+				match.Term,
+				match.Posting.TermFreq,
+				doc.Length,
+			)
 		}
+
+		score := s.scorer.CombineFieldScores(bodyScore, titleScore)
 
 		result := Result{
 			DocID: candidate.DocID,
@@ -152,13 +182,7 @@ func (s *Searcher) Search(rawQuery string, k int) []Result {
 		}
 	}
 
-	sort.Slice(results, func(i, j int) bool {
-		if results[i].Score == results[j].Score {
-			return results[i].DocID < results[j].DocID
-		}
-
-		return results[i].Score > results[j].Score
-	})
+	sortResults(results)
 
 	return results
 }
@@ -175,7 +199,10 @@ func (s *Searcher) PhraseMatch(rawPhrase string, docID string) bool {
 		terms = append(terms, token.Text)
 	}
 
-	return phraseMatch(s.index, docID, terms)
+	bodyMatch := phraseMatchField(s.index, docID, terms, false)
+	titleMatch := phraseMatchField(s.index, docID, terms, true)
+
+	return bodyMatch || titleMatch
 }
 
 type resultHeap []Result
@@ -186,11 +213,9 @@ func (h resultHeap) Len() int {
 
 func (h resultHeap) Less(i, j int) bool {
 	if h[i].Score == h[j].Score {
-		// for equal scores, the lexicographically larger DocID is worse
 		return h[i].DocID > h[j].DocID
 	}
 
-	// tge lower score is worse and belongs at the root
 	return h[i].Score < h[j].Score
 }
 
@@ -227,12 +252,27 @@ func (s *Searcher) SearchPhrase(rawPhrase string, k int) []Result {
 	candidates := s.candidates(tokens)
 
 	queryScorer := s.scorer.PrepareQuery(terms)
+	titleQueryScorer := s.scorer.PrepareTitleQuery(terms)
 
 	results := make(resultHeap, 0, min(k, len(candidates)))
 	heap.Init(&results)
 
 	for _, candidate := range candidates {
-		if !s.PhraseMatch(rawPhrase, candidate.DocID) {
+		bodyPhraseMatch := phraseMatchField(
+			s.index,
+			candidate.DocID,
+			terms,
+			false,
+		)
+
+		titlePhraseMatch := phraseMatchField(
+			s.index,
+			candidate.DocID,
+			terms,
+			true,
+		)
+
+		if !bodyPhraseMatch && !titlePhraseMatch {
 			continue
 		}
 
@@ -241,15 +281,35 @@ func (s *Searcher) SearchPhrase(rawPhrase string, k int) []Result {
 			continue
 		}
 
-		var score float64
+		var bodyScore float64
+		var titleScore float64
 
 		for _, match := range candidate.Matches {
-			score += queryScorer.ScoreTerm(
+			if match.IsTitle {
+				if !titlePhraseMatch {
+					continue
+				}
+
+				titleScore += titleQueryScorer.ScoreTerm(
+					match.Term,
+					match.Posting.TermFreq,
+					doc.TitleLength,
+				)
+				continue
+			}
+
+			if !bodyPhraseMatch {
+				continue
+			}
+
+			bodyScore += queryScorer.ScoreTerm(
 				match.Term,
 				match.Posting.TermFreq,
 				doc.Length,
 			)
 		}
+
+		score := s.scorer.CombineFieldScores(bodyScore, titleScore)
 
 		result := Result{
 			DocID: candidate.DocID,
@@ -272,6 +332,12 @@ func (s *Searcher) SearchPhrase(rawPhrase string, k int) []Result {
 		}
 	}
 
+	sortResults(results)
+
+	return results
+}
+
+func sortResults(results resultHeap) {
 	sort.Slice(results, func(i, j int) bool {
 		if results[i].Score == results[j].Score {
 			return results[i].DocID < results[j].DocID
@@ -279,6 +345,4 @@ func (s *Searcher) SearchPhrase(rawPhrase string, k int) []Result {
 
 		return results[i].Score > results[j].Score
 	})
-
-	return results
 }

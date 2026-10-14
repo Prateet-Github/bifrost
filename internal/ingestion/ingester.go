@@ -25,9 +25,10 @@ func NewIngester(
 }
 
 func (i *Ingester) Ingest(doc document.Document) error {
-	tokens := i.analyzer.Analyze(doc.Body)
+	titleTokens := i.analyzer.Analyze(doc.Title)
+	bodyTokens := i.analyzer.Analyze(doc.Body)
 
-	i.index.AddDocument(doc.ID, tokens)
+	i.index.AddDocumentFields(doc.ID, titleTokens, bodyTokens)
 
 	return nil
 }

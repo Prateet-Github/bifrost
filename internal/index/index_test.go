@@ -443,3 +443,150 @@ func TestSetDocumentStatsUpdatesTotalDocumentLength(t *testing.T) {
 		)
 	}
 }
+
+func TestAddDocumentFields(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	titleTokens := []tokenizer.Token{
+		{Text: "distributed", Position: 0},
+		{Text: "systems", Position: 1},
+	}
+
+	bodyTokens := []tokenizer.Token{
+		{Text: "distributed", Position: 3},
+		{Text: "systems", Position: 4},
+		{Text: "systems", Position: 5},
+	}
+
+	idx.AddDocumentFields("doc1", titleTokens, bodyTokens)
+
+	titlePostings := idx.LookupTitle("distributed")
+	bodyPostings := idx.Lookup("distributed")
+
+	if len(titlePostings) != 1 {
+		t.Fatalf("expected 1 title posting, got %d", len(titlePostings))
+	}
+
+	if len(bodyPostings) != 1 {
+		t.Fatalf("expected 1 body posting, got %d", len(bodyPostings))
+	}
+
+	if titlePostings[0].TermFreq != 1 {
+		t.Errorf("expected title term frequency 1, got %d", titlePostings[0].TermFreq)
+	}
+
+	if bodyPostings[0].TermFreq != 1 {
+		t.Errorf("expected body term frequency 1, got %d", bodyPostings[0].TermFreq)
+	}
+
+	if titlePostings[0].Positions[0] != 0 {
+		t.Errorf("expected title position 0, got %v", titlePostings[0].Positions)
+	}
+
+	if bodyPostings[0].Positions[0] != 3 {
+		t.Errorf("expected body position 3, got %v", bodyPostings[0].Positions)
+	}
+
+	systemsTitle := idx.LookupTitle("systems")
+	systemsBody := idx.Lookup("systems")
+
+	if systemsTitle[0].TermFreq != 1 {
+		t.Errorf("expected title systems frequency 1, got %d", systemsTitle[0].TermFreq)
+	}
+
+	if systemsBody[0].TermFreq != 2 {
+		t.Errorf("expected body systems frequency 2, got %d", systemsBody[0].TermFreq)
+	}
+}
+
+func TestAddDocumentFieldsStats(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	titleTokens := []tokenizer.Token{
+		{Text: "distributed", Position: 0},
+		{Text: "systems", Position: 1},
+	}
+
+	bodyTokens := []tokenizer.Token{
+		{Text: "systems", Position: 0},
+		{Text: "scale", Position: 1},
+		{Text: "well", Position: 2},
+	}
+
+	idx.AddDocumentFields("doc1", titleTokens, bodyTokens)
+
+	stats, exists := idx.DocumentStats("doc1")
+	if !exists {
+		t.Fatal("expected document stats to exist")
+	}
+
+	if stats.TitleLength != 2 {
+		t.Errorf("expected title length 2, got %d", stats.TitleLength)
+	}
+
+	if stats.Length != 3 {
+		t.Errorf("expected body length 3, got %d", stats.Length)
+	}
+
+	indexStats := idx.Stats()
+
+	if indexStats.AverageDocLength != 3 {
+		t.Errorf("expected average body length 3, got %f", indexStats.AverageDocLength)
+	}
+}
+
+func TestAddDocumentFieldsReplacesExistingDocument(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	idx.AddDocumentFields(
+		"doc1",
+		[]tokenizer.Token{{Text: "oldtitle", Position: 0}},
+		[]tokenizer.Token{{Text: "oldbody", Position: 0}},
+	)
+
+	idx.AddDocumentFields(
+		"doc1",
+		[]tokenizer.Token{{Text: "newtitle", Position: 0}},
+		[]tokenizer.Token{{Text: "newbody", Position: 0}},
+	)
+
+	if len(idx.LookupTitle("oldtitle")) != 0 {
+		t.Error("expected old title posting to be removed")
+	}
+
+	if len(idx.Lookup("oldbody")) != 0 {
+		t.Error("expected old body posting to be removed")
+	}
+
+	if len(idx.LookupTitle("newtitle")) != 1 {
+		t.Error("expected new title posting")
+	}
+
+	if len(idx.Lookup("newbody")) != 1 {
+		t.Error("expected new body posting")
+	}
+}
+
+func TestRemoveDocumentFields(t *testing.T) {
+	idx := NewInvertedIndex()
+
+	idx.AddDocumentFields(
+		"doc1",
+		[]tokenizer.Token{{Text: "titleterm", Position: 0}},
+		[]tokenizer.Token{{Text: "bodyterm", Position: 0}},
+	)
+
+	idx.Remove("doc1")
+
+	if len(idx.LookupTitle("titleterm")) != 0 {
+		t.Error("expected title posting to be removed")
+	}
+
+	if len(idx.Lookup("bodyterm")) != 0 {
+		t.Error("expected body posting to be removed")
+	}
+
+	if _, exists := idx.DocumentStats("doc1"); exists {
+		t.Error("expected document stats to be removed")
+	}
+}

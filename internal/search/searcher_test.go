@@ -402,3 +402,45 @@ func TestSearchTopKTieBreaking(t *testing.T) {
 		)
 	}
 }
+
+func TestSearchTitleBoost(t *testing.T) {
+	analyzer := analysis.NewAnalyzer()
+	idx := index.NewInvertedIndex()
+
+	// D1 matches "golang" in its title.
+	idx.AddDocumentFields(
+		"D1",
+		analyzer.Analyze("golang"),
+		analyzer.Analyze("programming language"),
+	)
+
+	// D2 matches "golang" only in its body.
+	idx.AddDocumentFields(
+		"D2",
+		analyzer.Analyze("programming"),
+		analyzer.Analyze("golang"),
+	)
+
+	searcher := NewSearcher(idx)
+
+	results := searcher.Search("golang", 2)
+
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+
+	if results[0].DocID != "D1" {
+		t.Errorf(
+			"expected title-matching D1 to rank first, got %s",
+			results[0].DocID,
+		)
+	}
+
+	if results[0].Score <= results[1].Score {
+		t.Errorf(
+			"expected title match to receive a higher score: %f <= %f",
+			results[0].Score,
+			results[1].Score,
+		)
+	}
+}

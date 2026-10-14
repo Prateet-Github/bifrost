@@ -7,9 +7,10 @@ import (
 )
 
 type BM25 struct {
-	K1    float64
-	B     float64
-	index *index.InvertedIndex
+	K1         float64
+	B          float64
+	TitleBoost float64
+	index      *index.InvertedIndex
 }
 
 type QueryScorer struct {
@@ -20,10 +21,51 @@ type QueryScorer struct {
 
 func NewBM25(idx *index.InvertedIndex) *BM25 {
 	return &BM25{
-		K1:    1.2,
-		B:     0.75,
-		index: idx,
+		K1:         1.2,
+		B:          0.75,
+		TitleBoost: 2.0,
+		index:      idx,
 	}
+}
+
+func (b *BM25) TitleIDF(term string) float64 {
+	stats := b.index.TitleStats()
+	df := b.index.TitleDocumentFrequency(term)
+
+	if df == 0 {
+		return 0
+	}
+
+	return math.Log(
+		1 + (float64(stats.Documents)-float64(df)+0.5)/
+			(float64(df)+0.5),
+	)
+}
+
+func (b *BM25) TitleTermScore(
+	term string,
+	tf int,
+	titleLength int,
+) float64 {
+	if tf == 0 {
+		return 0
+	}
+
+	stats := b.index.TitleStats()
+
+	if stats.AverageDocLength == 0 {
+		return 0
+	}
+
+	idf := b.TitleIDF(term)
+
+	tfScore := b.TermFrequencyScore(
+		tf,
+		titleLength,
+		stats.AverageDocLength,
+	)
+
+	return idf * tfScore
 }
 
 func (b *BM25) IDF(term string) float64 {
@@ -121,4 +163,41 @@ func (q *QueryScorer) ScoreTerm(
 	)
 
 	return idf * tfScore
+}
+
+func (b *BM25) PrepareTitleQuery(terms []string) *QueryScorer {
+	stats := b.index.TitleStats()
+
+	scorer := &QueryScorer{
+		bm25:         b,
+		avgDocLength: stats.AverageDocLength,
+		idfCache:     make(map[string]float64, len(terms)),
+	}
+
+	for _, term := range terms {
+		if _, exists := scorer.idfCache[term]; exists {
+			continue
+		}
+
+		df := b.index.TitleDocumentFrequency(term)
+
+		if df == 0 {
+			scorer.idfCache[term] = 0
+			continue
+		}
+
+		scorer.idfCache[term] = math.Log(
+			1 + (float64(stats.Documents)-float64(df)+0.5)/
+				(float64(df)+0.5),
+		)
+	}
+
+	return scorer
+}
+
+func (b *BM25) CombineFieldScores(
+	bodyScore float64,
+	titleScore float64,
+) float64 {
+	return bodyScore + b.TitleBoost*titleScore
 }

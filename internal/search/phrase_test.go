@@ -22,6 +22,7 @@ func TestPositionsForTerm(t *testing.T) {
 		idx,
 		"go",
 		"D1",
+		false,
 	)
 
 	expected := []int{0, 1, 3}
