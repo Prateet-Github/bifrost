@@ -39,6 +39,23 @@ func NewSearcher(idx *index.InvertedIndex) *Searcher {
 	}
 }
 
+// deduplicate query terms
+func deduplicateTokens(tokens []tokenizer.Token) []tokenizer.Token {
+	seen := make(map[string]struct{}, len(tokens))
+	unique := make([]tokenizer.Token, 0, len(tokens))
+
+	for _, token := range tokens {
+		if _, exists := seen[token.Text]; exists {
+			continue
+		}
+
+		seen[token.Text] = struct{}{}
+		unique = append(unique, token)
+	}
+
+	return unique
+}
+
 func (s *Searcher) Candidates(rawQuery string) []Candidate {
 	tokens := s.queryAnalyzer.Analyze(rawQuery)
 
@@ -79,7 +96,8 @@ func (s *Searcher) candidates(tokens []tokenizer.Token) []Candidate {
 }
 
 func (s *Searcher) Search(rawQuery string, k int) []Result {
-	tokens := s.queryAnalyzer.Analyze(rawQuery)
+	// tokens := s.queryAnalyzer.Analyze(rawQuery)
+	tokens := deduplicateTokens(s.queryAnalyzer.Analyze(rawQuery))
 
 	if len(tokens) == 0 || k <= 0 {
 		return nil
