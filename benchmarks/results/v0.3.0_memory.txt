@@ -1,0 +1,17 @@
+Bifrost v0.3.0 — Heap Memory Benchmark
+
+Environment:
+- OS: macOS (darwin)
+- Architecture: arm64
+- CPU: Apple M2
+- Command: go test -run '^$' -bench '^BenchmarkEngineHeapMemory$' -benchtime=1x ./internal/engine
+
+Results:
+- 1,000 documents: 2.535 MiB heap
+- 10,000 documents: 14.42 MiB heap
+- 100,000 documents: 179.7 MiB heap
+
+Notes:
+- HeapAlloc was sampled while the engine was open.
+- HeapAlloc is process-level memory, not an isolated measurement of the engine.
+- Startup timings are single-iteration measurements and should not be treated as stable performance baselines.

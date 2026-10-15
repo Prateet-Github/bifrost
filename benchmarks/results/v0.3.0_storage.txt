@@ -1,0 +1,30 @@
+Bifrost v0.3.0 — Storage Benchmark
+
+Environment:
+- OS: macOS (darwin)
+- Architecture: arm64
+- CPU: Apple M2
+- Command: go test -run '^$' -bench '^BenchmarkSaveIndex$' -benchmem -count=1 ./internal/storage
+
+Results:
+BenchmarkSaveIndex/Docs1000:
+  15106331 ns/op
+  524288 db-bytes
+  4673679 B/op
+  83905 allocs/op
+
+BenchmarkSaveIndex/Docs10000:
+  46971714 ns/op
+  4194304 db-bytes
+  55877141 B/op
+  1081828 allocs/op
+
+BenchmarkSaveIndex/Docs100000:
+  502322958 ns/op
+  41664512 db-bytes
+  689775368 B/op
+  14811357 allocs/op
+
+Notes:
+- Initial baseline; one benchmark run.
+- Results are specific to the hardware and environment listed above.
