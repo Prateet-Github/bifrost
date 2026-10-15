@@ -19,7 +19,7 @@ Query → Query Analysis → Retrieval → BM25 → Top-K Results
 - Separate title and body indexing
 - Phrase search
 - BM25 ranking with title boosting
-- Top-K result selection
+- Top-K (min-heap) result selection
 - Compact posting encoding
 - Persistent storage with bbolt
 - Source fingerprinting and automatic index rebuilding
@@ -58,7 +58,7 @@ go test -race ./...
 Benchmarked on Apple M2 (`darwin/arm64`).
 
 | Corpus | Search Latency | Index Save Time |
-|---:|---:|---:|
+| ---: | ---: | ---: |
 | 1,000 documents | 333 µs | 14.41 ms |
 | 10,000 documents | 3.21 ms | 52.57 ms |
 | 100,000 documents | 42.18 ms | 512.89 ms |
