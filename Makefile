@@ -1,7 +1,7 @@
 BINARY=bifrost
 
 .PHONY: all
-all: fmt test
+all: fmt vet test race
 
 .PHONY: fmt
 fmt:
