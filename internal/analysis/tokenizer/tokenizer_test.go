@@ -38,11 +38,11 @@ func TestTokenize(t *testing.T) {
 			},
 		},
 		{
-			name:  "punctuation preserved",
+			name:  "punctuation trimmed",
 			input: "Hello, world!",
 			expected: []Token{
-				{Text: "Hello,", Position: 0, StartOffset: 0, EndOffset: 6},
-				{Text: "world!", Position: 1, StartOffset: 7, EndOffset: 13},
+				{Text: "Hello", Position: 0, StartOffset: 0, EndOffset: 6},
+				{Text: "world", Position: 1, StartOffset: 7, EndOffset: 13},
 			},
 		},
 		{
@@ -62,6 +62,46 @@ func TestTokenize(t *testing.T) {
 			name:     "whitespace only",
 			input:    "   \n\t  ",
 			expected: []Token{},
+		},
+
+		{
+			name:  "leading and trailing punctuation trimmed",
+			input: "Hello, world!",
+			expected: []Token{
+				{Text: "Hello", Position: 0, StartOffset: 0, EndOffset: 6},
+				{Text: "world", Position: 1, StartOffset: 7, EndOffset: 13},
+			},
+		},
+		{
+			name:  "inner punctuation preserved",
+			input: "Node.js don't",
+			expected: []Token{
+				{Text: "Node.js", Position: 0, StartOffset: 0, EndOffset: 7},
+				{Text: "don't", Position: 1, StartOffset: 8, EndOffset: 13},
+			},
+		},
+		{
+			name:  "allowlisted technical terms",
+			input: "C++ C# .NET",
+			expected: []Token{
+				{Text: "C++", Position: 0, StartOffset: 0, EndOffset: 3},
+				{Text: "C#", Position: 1, StartOffset: 4, EndOffset: 6},
+				{Text: ".NET", Position: 2, StartOffset: 7, EndOffset: 11},
+			},
+		},
+		{
+			name:  "dash slash and hyphen separators",
+			input: "alpha—beta gamma–delta path/name distributed-systems",
+			expected: []Token{
+				{Text: "alpha", Position: 0, StartOffset: 0, EndOffset: 5},
+				{Text: "beta", Position: 1, StartOffset: 8, EndOffset: 12},
+				{Text: "gamma", Position: 2, StartOffset: 13, EndOffset: 18},
+				{Text: "delta", Position: 3, StartOffset: 21, EndOffset: 26},
+				{Text: "path", Position: 4, StartOffset: 27, EndOffset: 31},
+				{Text: "name", Position: 5, StartOffset: 32, EndOffset: 36},
+				{Text: "distributed", Position: 6, StartOffset: 37, EndOffset: 48},
+				{Text: "systems", Position: 7, StartOffset: 49, EndOffset: 56},
+			},
 		},
 	}
 

@@ -161,3 +161,24 @@ func TestStopWordFilterAllStopWords(t *testing.T) {
 		t.Fatalf("got %d tokens, want 0", len(result))
 	}
 }
+
+func TestStopWordFilterWithPunctuation(t *testing.T) {
+	tokenizer := tokenizer.NewTokenizer()
+	filter := NewStopWordFilter()
+
+	tokens := tokenizer.Tokenize("the, quick, fox!")
+
+	result := filter.Filter(tokens)
+
+	expected := []string{"quick", "fox"}
+
+	if len(result) != len(expected) {
+		t.Fatalf("got %d tokens, want %d", len(result), len(expected))
+	}
+
+	for i, token := range result {
+		if token.Text != expected[i] {
+			t.Errorf("result[%d].Text = %q, want %q", i, token.Text, expected[i])
+		}
+	}
+}
