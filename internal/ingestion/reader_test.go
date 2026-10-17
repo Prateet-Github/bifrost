@@ -33,8 +33,8 @@ func TestReader(t *testing.T) {
 		t.Fatalf("expected ID search.txt, got %s", doc.ID)
 	}
 
-	if doc.Title != "search.txt" {
-		t.Fatalf("expected title search.txt, got %s", doc.Title)
+	if doc.Title != content {
+		t.Fatalf("expected title %q, got %q", content, doc.Title)
 	}
 
 	if doc.Body != content {
