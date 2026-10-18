@@ -7,6 +7,8 @@ import (
 	"github.com/Prateet-Github/bifrost/internal/analysis/tokenizer"
 )
 
+const Version = "1"
+
 type Analyzer struct {
 	tokenizer  *tokenizer.Tokenizer
 	normalizer *normalizer.Normalizer

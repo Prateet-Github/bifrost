@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/Prateet-Github/bifrost/internal/analysis"
 	"github.com/Prateet-Github/bifrost/internal/codec"
 	"github.com/Prateet-Github/bifrost/internal/index"
 	"go.etcd.io/bbolt"
@@ -24,6 +25,7 @@ var (
 	builtKey             = []byte("built")
 	schemaVersionKey     = []byte("schema_version")
 	sourceFingerprintKey = []byte("source_fingerprint")
+	analysisVersionKey   = []byte("analysis_version")
 )
 
 var compactPostingMagic = []byte("BCP1")
@@ -397,6 +399,13 @@ func (s *Storage) SaveIndex(
 		}
 
 		if err := metadata.Put(
+			analysisVersionKey,
+			[]byte(analysis.Version),
+		); err != nil {
+			return err
+		}
+
+		if err := metadata.Put(
 			sourceFingerprintKey,
 			[]byte(fingerprint),
 		); err != nil {
@@ -653,12 +662,17 @@ func (s *Storage) IsIndexReady() (bool, error) {
 
 		built := bucket.Get(builtKey)
 		version := bucket.Get(schemaVersionKey)
+		analysisVersion := bucket.Get(analysisVersionKey)
 
 		if string(built) != "true" {
 			return nil
 		}
 
 		if string(version) != currentSchemaVersion {
+			return nil
+		}
+
+		if string(analysisVersion) != analysis.Version {
 			return nil
 		}
 

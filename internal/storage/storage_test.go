@@ -229,9 +229,16 @@ func TestIsIndexReady(t *testing.T) {
 			return err
 		}
 
-		return bucket.Put(
+		if err := bucket.Put(
 			schemaVersionKey,
 			[]byte(currentSchemaVersion),
+		); err != nil {
+			return err
+		}
+
+		return bucket.Put(
+			analysisVersionKey,
+			[]byte(analysis.Version),
 		)
 	})
 
