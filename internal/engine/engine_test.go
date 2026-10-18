@@ -275,3 +275,55 @@ func BenchmarkEngineHeapMemory(b *testing.B) {
 		})
 	}
 }
+
+func TestSearchMatchesTrailingPunctuation(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "bifrost.db")
+	docsPath := t.TempDir()
+
+	writeDocument(t, docsPath, "world.txt", "Hello, world!")
+
+	bifrost, err := Open(Config{
+		DBPath:   dbPath,
+		DocsPath: docsPath,
+	})
+	if err != nil {
+		t.Fatalf("failed to open engine: %v", err)
+	}
+	defer bifrost.Close()
+
+	results := bifrost.Search("world", 10)
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result for query %q, got %d", "world", len(results))
+	}
+
+	if results[0].DocID != "world.txt" {
+		t.Fatalf("expected world.txt, got %q", results[0].DocID)
+	}
+}
+
+func TestSearchMatchesFilenameDerivedTitle(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "bifrost.db")
+	docsPath := t.TempDir()
+
+	writeDocument(t, docsPath, "distributed-systems.txt", "")
+
+	bifrost, err := Open(Config{
+		DBPath:   dbPath,
+		DocsPath: docsPath,
+	})
+	if err != nil {
+		t.Fatalf("failed to open engine: %v", err)
+	}
+	defer bifrost.Close()
+
+	results := bifrost.Search("distributed systems", 10)
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+
+	if results[0].DocID != "distributed-systems.txt" {
+		t.Fatalf("expected distributed-systems.txt, got %q", results[0].DocID)
+	}
+}
