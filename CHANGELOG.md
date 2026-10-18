@@ -4,9 +4,10 @@
 
 All notable changes to Bifrost are documented in this file.
 
-## [0.3.0] - Unrealeased
+## [0.3.0] - 2026-10-18
 
-Changes planned for the next release.
+- Add all benchmarks
+- Analysis fixes
 
 ## [0.2.0] - 2026-10-16
 
