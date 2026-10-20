@@ -57,10 +57,12 @@ go test -race ./...
 
 Benchmarked on Apple M2 (`darwin/arm64`).
 
+![search-latency](assets/images/search.png)
+
 | Corpus | Search Latency | Index Save Time |
 | ---: | ---: | ---: |
-| 1,000 documents | 333 µs | 14.41 ms |
-| 10,000 documents | 3.21 ms | 52.57 ms |
-| 100,000 documents | 42.18 ms | 512.89 ms |
+| 1,000 documents | 329 µs | 14.41 ms |
+| 10,000 documents | 3.24 ms | 52.57 ms |
+| 100,000 documents | 43.9 ms | 512.89 ms |
 
 These are local benchmark results, not production performance guarantees.
